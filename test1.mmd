@@ -1,0 +1,14 @@
+flowchart TB
+    A["Tiếp nhận yêu cầu"] --> B["Kiểm tra thông tin"]
+    B --> C{"Thông tin hợp lệ?"}
+
+    C -->|Có| D["Xử lý yêu cầu"]
+    C -->|Không| E["Yêu cầu bổ sung"]
+
+    E --> B
+
+    D --> F["Lưu kết quả"]
+    D --> G["Gửi thông báo"]
+
+    F --> H["Hoàn tất"]
+    G --> H

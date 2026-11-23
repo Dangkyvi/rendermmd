@@ -1,0 +1,104 @@
+---
+title: "BẢN THỬ TỔNG HỢP — 14 hình #amp; các kiểu cạnh"
+config:
+  theme: base
+  themeVariables:
+    fontFamily: Noto Sans
+    fontSize: 15px
+    primaryColor: '#eff6ff'
+    primaryTextColor: '#172554'
+    primaryBorderColor: '#2563eb'
+    lineColor: '#64748b'
+    clusterBkg: '#f8fafc'
+    clusterBorder: '#94a3b8'
+    edgeLabelBackground: '#ffffff'
+---
+%% Một source chỉ có một header/hướng chính. Đổi TB thành TD/BT/LR/RL
+%% hoặc flowchart thành graph để xem các biến thể, không ghép nhiều header.
+%% Đủ 14 shape legacy; flag là odd, không phải paper-tape hiện đại.
+%% Cạnh invisible có tham gia layout nhưng không có nét/nhãn nhìn thấy.
+flowchart TB
+  subgraph intake ["01 · Tiếp nhận dữ liệu"]
+    direction LR
+    rect["rect<br/>Tiếp nhận #quot;đơn#quot;"]:::blue
+    rounded("rounded<br/>Chuẩn hóa tiếng Việt"):::blue
+    stadium(["stadium<br/>Sẵn sàng xử lý"]):::green
+    subroutine[["subroutine<br/>Gọi quy trình con"]]:::blue
+    rect -->|solid · arrow| rounded
+    rounded -.->|dotted · arrow| stadium
+    stadium ==>|thick · arrow| subroutine
+  end
+
+  subgraph processing ["02 · Xử lý — nhóm lồng nhau"]
+    direction TB
+    subgraph checks ["Kiểm tra và quyết định"]
+      direction LR
+      cylinder[("cylinder<br/>Kho dữ liệu")]:::blue
+      circle(("circle<br/>Sự kiện")):::green
+      diamond{"diamond<br/>Hợp lệ?"}:::amber
+      hexagon{{"hexagon<br/>Điều kiện bổ sung"}}:::amber
+      cylinder ---|solid · none| circle
+      circle --o|circle ở cuối| diamond
+      diamond --x|cross ở cuối| hexagon
+    end
+    subgraph transforms ["Chuyển đổi và điều phối"]
+      direction LR
+      parallelogram[/"parallelogram<br/>Dữ liệu vào"/]:::blue
+      parallelogram_alt[\"parallelogram_alt<br/>Dữ liệu ra"\]:::blue
+      trapezoid[/"trapezoid<br/>Thao tác thủ công"\]:::amber
+      trapezoid_alt[\"trapezoid_alt<br/>Bước chuẩn bị"/]:::amber
+      parallelogram <--> |arrow hai đầu| parallelogram_alt
+      parallelogram_alt o--o|circle hai đầu| trapezoid
+      trapezoid x--x|cross hai đầu| trapezoid_alt
+    end
+    checks -->|liên kết giữa subgraph| transforms
+  end
+
+  subgraph result ["03 · Kết quả và phản hồi"]
+    direction LR
+    flag>"flag / odd<br/>Cờ thông báo"]:::pink
+    double_circle((("double_circle<br/>Hoàn tất"))):::green
+    flag <==>|thick · both| double_circle
+  end
+
+  %% Chuỗi và hai cạnh song song giữa cùng một cặp node.
+  subroutine -->|chuỗi 1| cylinder -->|chuỗi 2| parallelogram
+  rect -->|song song · ưu tiên| rounded
+  rect -->|song song · dự phòng| rounded
+
+  %% Các tổ hợp nét và marker còn lại.
+  circle <-.->|dotted · both| diamond
+  diamond o==o|thick · circle| hexagon
+  diamond x==x|thick · cross| hexagon
+  parallelogram o-.-o|dotted · circle| parallelogram_alt
+  parallelogram x-.-x|dotted · cross| parallelogram_alt
+  trapezoid -.-|dotted · none| trapezoid_alt
+  trapezoid ===|thick · none| trapezoid_alt
+
+  %% Nhóm &: fan-out/fan-in; cạnh xuyên ranh giới và nối cluster.
+  hexagon & trapezoid_alt -->|gom kết quả| flag & double_circle
+  intake -->|liên kết cấp nhóm| processing
+  processing -->|bàn giao| result
+  parallelogram_alt -->|xuyên nhóm| flag
+
+  %% Chu trình và self-loop.
+  flag -->|làm lại| cylinder
+  double_circle -->|tự kiểm tra| double_circle
+
+  %% Invisible chỉ ảnh hưởng bố cục.
+  rounded ~~~ stadium
+
+  classDef blue fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef green fill:#dcfce7,stroke:#16a34a,color:#14532d
+  classDef amber fill:#fef3c7,stroke:#d97706,color:#78350f
+  classDef pink fill:#fce7f3,stroke:#db2777,color:#831843
+  class double_circle green
+  style diamond fill:#ffedd5,stroke:#ea580c,stroke-width:3px,font-weight:bold
+  style intake fill:#eff6ff,stroke:#93c5fd
+  style processing fill:#f8fafc,stroke:#64748b
+  style checks fill:#fffbeb,stroke:#fbbf24
+  style transforms fill:#f0fdfa,stroke:#5eead4
+  style result fill:#fdf2f8,stroke:#f9a8d4
+  linkStyle default stroke:#64748b,color:#334155
+  %% Ordinal 0 là cạnh rect --> rounded đầu tiên, không phải cạnh song song.
+  linkStyle 0 stroke:#2563eb,stroke-width:3px,color:#1d4ed8

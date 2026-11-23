@@ -1,0 +1,29 @@
+flowchart TB
+    rect["rect"]
+    rounded("rounded")
+    stadium(["stadium"])
+    subroutine[["subroutine"]]
+    cylinder[("cylinder")]
+    circle(("circle"))
+    diamond{"diamond"}
+    hexagon{{"hexagon"}}
+    leanright[/"leanright"/]
+    leanleft[\"leanleft"\]
+    trapezoid[/"trapezoid"\]
+    invtrapezoid[\"invtrapezoid"/]
+    flag>"flag"]
+    doublecircle((("doublecircle")))
+    rect <--> rounded
+    rounded o--o stadium
+    stadium x--x subroutine
+    subroutine --- cylinder
+    cylinder <--> circle
+    circle o--o diamond
+    diamond x--x hexagon
+    hexagon --- leanright
+    leanright <--> leanleft
+    leanleft o--o trapezoid
+    trapezoid x--x invtrapezoid
+    invtrapezoid --- flag
+    flag <--> doublecircle
+    doublecircle o--o rect

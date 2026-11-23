@@ -1,0 +1,31 @@
+---
+title: "Sơ đồ Tiếng Việt #amp; AIZ"
+config:
+  theme: base
+  themeVariables:
+    fontFamily: Noto Sans
+    fontSize: 20px
+    primaryColor: '#ddeeff'
+    primaryTextColor: '#172554'
+    primaryBorderColor: '#123456'
+    lineColor: '#64748b'
+    clusterBkg: '#f0fdf4'
+    clusterBorder: '#166534'
+    edgeLabelBackground: '#ffffff'
+---
+flowchart LR
+  subgraph S ["Nhóm<br />Tiếng Việt"]
+    A["Dựng sẵn<br>Tiếng Việt #quot;A#quot; #amp;"]:::first
+    B("Dấu kết hợp<br/>Tiếng Việt"):::first
+    A -->|nhánh một| B
+    A -->|nhánh hai| B
+  end
+  C["Mặc định"]
+  classDef default fill:#fefce8,stroke:#854d0e,color:#422006
+  classDef first fill:#e0e7ff,stroke:#4338ca,color:#312e81,font-size:22px
+  classDef second fill:#dcfce7,color:#14532d,font-family:Noto Serif,font-weight:bold
+  class A second
+  style A fill:#fce7f3,color:#831843,font-size:26px,font-style:italic,stroke-width:4px
+  style S fill:#ecfeff,stroke:#155e75,color:#164e63
+  linkStyle default stroke:#334155,color:#0f172a
+  linkStyle 1 stroke:#be123c,stroke-width:5px,color:#9f1239,font-size:24px,font-weight:bold

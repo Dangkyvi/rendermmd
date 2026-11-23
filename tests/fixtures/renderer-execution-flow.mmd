@@ -1,0 +1,56 @@
+---
+title: "LUỒNG CHẠY RENDERER — từ yêu cầu đến đầu ra"
+config:
+  theme: base
+  themeVariables:
+    fontFamily: Noto Sans
+    fontSize: 16px
+    primaryColor: '#eff6ff'
+    primaryTextColor: '#172554'
+    primaryBorderColor: '#2563eb'
+    lineColor: '#64748b'
+    clusterBkg: '#f8fafc'
+    clusterBorder: '#94a3b8'
+    edgeLabelBackground: '#ffffff'
+---
+flowchart TB
+  request(["1 · Yêu cầu render<br/>Source Mermaid + scale + timeout"]):::input
+  entry{"Cách gọi?"}:::decision
+  cli["2a · CLI: scripts/render.sh<br/>Kiểm tra file/output và Docker<br/>Chạy container offline có giới hạn"]:::input
+  read["renderer.py · main<br/>Đọc file UTF-8, kiểm tra tham số<br/>Mặc định scale=2, timeout=30 giây"]:::python
+  api["2b · Python API<br/>render(source, scale, timeout)<br/>Trong môi trường đã đóng gói"]:::input
+
+  prepare["3 · Python controller<br/>Kiểm tra source, giới hạn, dependency<br/>Tính renderer identity; tạo scratch riêng"]:::python
+  parse["4 · Node backend: draw-probe.mjs<br/>Đọc YAML/theme/style; từ chối nội dung nguy hiểm<br/>Mermaid parse source và kiểm tra flowchart"]:::backend
+  text["5 · text_geometry.py<br/>Pango/Cairo shape chữ và đo nhãn<br/>Font thực tế, dấu tiếng Việt, glyph path"]:::backend
+  layout["6 · Bố trí và định tuyến<br/>Dagre + subgraph-layout.mjs<br/>Node, nhóm, cạnh, nhãn và marker"]:::backend
+  vector["7 · Backend tạo kết quả vector<br/>diagram.svg + layout.json<br/>Trong scratch của lượt render"]:::backend
+  validate["8 · Python kiểm tra SVG/layout<br/>Schema, viewBox, identity, ID/reference<br/>Allowlist SVG và giới hạn raster"]:::python
+  raster["9 · rsvg-convert<br/>Raster chính file SVG vừa kiểm tra<br/>Thành PNG theo scale"]:::backend
+  complete["10 · Python kiểm tra kết quả<br/>PNG signature, dimensions, CRC, tổng dung lượng<br/>Tạo Rendered; dọn scratch; kiểm tra deadline"]:::python
+  delivery{"Trả theo cách gọi ban đầu"}:::decision
+  publish["11a · CLI công bố atomic<br/>Ghi ba file vào staging rồi rename<br/>Không ghi đè thư mục output có sẵn"]:::output
+  files(["12a · Kết quả trên đĩa<br/>diagram.svg + diagram.png + layout.json<br/>stdout: đường dẫn output; exit 0"]):::output
+  object(["11b · API trả Rendered<br/>svg: str · png: bytes · layout: dict<br/>Caller nhận trực tiếp, API không ghi file public"]):::output
+  error["Nhánh lỗi ở bất kỳ bước tương ứng<br/>SyntaxError có số dòng hoặc RendererError có code<br/>CLI: JSON stderr + exit 1; API: exception"]:::error
+  deadline["Deadline chung cho mỗi lượt<br/>Hết hạn: dừng cây tiến trình con<br/>Dọn tài nguyên đã tạo; không trả kết quả dở dang"]:::note
+
+  request --> entry
+  entry -->|CLI| cli --> read --> prepare
+  entry -->|Python API| api --> prepare
+  prepare --> parse --> text --> layout --> vector --> validate --> raster --> complete --> delivery
+  delivery -->|CLI| publish --> files
+  delivery -->|Python API| object
+  prepare -.->|validation/dependency| error
+  parse -.->|syntax/policy/unsupported| error
+  validate -.->|output không hợp lệ| error
+  complete -.->|PNG/limit/deadline| error
+  deadline -.->|áp dụng xuyên suốt pipeline| prepare
+
+  classDef input fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef python fill:#e0e7ff,stroke:#6366f1,color:#312e81
+  classDef backend fill:#fef3c7,stroke:#d97706,color:#78350f
+  classDef decision fill:#f1f5f9,stroke:#64748b,color:#334155
+  classDef output fill:#dcfce7,stroke:#16a34a,color:#14532d
+  classDef error fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef note fill:#f3e8ff,stroke:#9333ea,color:#581c87

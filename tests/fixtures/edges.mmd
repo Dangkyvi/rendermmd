@@ -1,0 +1,28 @@
+flowchart LR
+    arrow["marker collision"] --> A["A"]
+    A --- B["B"]
+    B -.-> C["C"]
+    C ==> D["D"]
+    D ~~~|hidden| E["E"]
+    E --o F["F"]
+    F --x G["G"]
+    G <--> H["H"]
+    H o--o I["I"]
+    I x--x J["J"]
+    J <==> K["K"]
+    K <-.-> L["L"]
+    L o==o M["M"]
+    M x==x N["N"]
+    N o-.-o O["O"]
+    O x-.-x P["P"]
+    P -.- Q["Q"]
+    Q === R["R"]
+    A -->|first| B
+    A -->|second| B
+    R --> S["S"] --> T["T"]
+    T & U["U"] --> V["V"] & W["W"]
+    W --> arrow
+    V --> V
+    aiz-marker-point["ID collision"] --> aiz-marker-point-1["ID collision 2"]
+    linkStyle 18 stroke:#123456
+    linkStyle 4 stroke:#ff0000,stroke-width:9

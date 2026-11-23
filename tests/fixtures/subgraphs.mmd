@@ -1,0 +1,19 @@
+flowchart LR
+  subgraph outer ["Quy trình ngoài"]
+    direction TB
+    A["Tiếp nhận"]
+    subgraph inner ["Xử lý bên trong"]
+      direction RL
+      B("Kiểm tra") -->|hợp lệ| C{"Chấp nhận"}
+    end
+    A --> inner
+    inner --> D["Kết thúc"]
+  end
+  subgraph other ["Nhóm thứ hai"]
+    direction BT
+    E --> F
+  end
+  X --> outer
+  outer --> other
+  C -->|xuyên ranh giới| E
+  D --> X

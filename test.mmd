@@ -1,0 +1,127 @@
+flowchart TB
+    START["Tiếp nhận đơn hàng"]
+
+    subgraph INTAKE["Tiếp nhận và xác thực"]
+        A["Đọc thông tin đơn"]
+        B["Kiểm tra khách hàng"]
+        C["Kiểm tra địa chỉ"]
+        D["Kiểm tra mã giảm giá"]
+        E["Tổng hợp kết quả"]
+        F{"Thông tin hợp lệ?"}
+
+        A --> B
+        A --> C
+        A --> D
+        B --> E
+        C --> E
+        D --> E
+        E --> F
+    end
+
+    subgraph INVENTORY["Kho và cung ứng"]
+        G["Kiểm tra tồn kho"]
+        H{"Đủ hàng?"}
+        I["Giữ hàng"]
+        J["Tìm kho thay thế"]
+        K["Yêu cầu nhập hàng"]
+        L["Xác nhận hàng sẵn sàng"]
+
+        G --> H
+        H -->|Có| I
+        H -->|Không| J
+        J -->|Tìm thấy| I
+        J -->|Không tìm thấy| K
+        K --> G
+        I --> L
+    end
+
+    subgraph PAYMENT["Thanh toán"]
+        M["Tính tổng tiền"]
+        N["Tạo yêu cầu thanh toán"]
+        O{"Thanh toán thành công?"}
+        P["Ghi nhận giao dịch"]
+        Q["Đề nghị thanh toán lại"]
+        R["Hoàn tiền"]
+
+        M --> N
+        N --> O
+        O -->|Có| P
+        O -->|Không| Q
+        Q --> N
+        P -->|Phát sinh hủy đơn| R
+    end
+
+    subgraph DELIVERY["Đóng gói và giao hàng"]
+        S["Đối chiếu hàng và thanh toán"]
+        T["Tạo phiếu đóng gói"]
+        U["Kiểm tra chất lượng"]
+        V{"Đạt chất lượng?"}
+        W["Bàn giao vận chuyển"]
+        X["Theo dõi giao hàng"]
+        Y{"Giao thành công?"}
+        Z["Xử lý giao thất bại"]
+
+        S --> T
+        T --> U
+        U --> V
+        V -->|Có| W
+        V -->|Không| T
+        W --> X
+        X --> Y
+        Y -->|Không| Z
+        Z -->|Giao lại| W
+    end
+
+    subgraph SUPPORT["Thông báo và giám sát"]
+        LOG["Ghi nhật ký"]
+        NOTICE["Thông báo khách hàng"]
+        STAFF["Thông báo nhân viên"]
+        REVIEW["Xử lý thủ công"]
+    end
+
+    DONE["Hoàn tất đơn hàng"]
+    CANCEL["Hủy đơn hàng"]
+
+    START --> A
+    F -->|Có| G
+    F -->|Có| M
+    F -->|Không| REVIEW
+    REVIEW -->|Đã sửa| A
+    REVIEW -->|Không xử lý được| CANCEL
+
+    L --> S
+    P --> S
+    L --> M
+
+    Y -->|Có| DONE
+    Z -->|Hàng bị trả lại| G
+    Z -->|Khách hủy| R
+    R --> CANCEL
+    CANCEL -->|Giải phóng hàng| G
+
+    B -.-> LOG
+    I -.-> LOG
+    P -.-> LOG
+    W -.-> LOG
+    DONE -.-> LOG
+    CANCEL -.-> LOG
+
+    P --> NOTICE
+    W --> NOTICE
+    DONE --> NOTICE
+    CANCEL --> NOTICE
+
+    K --> STAFF
+    Q --> STAFF
+    Z --> STAFF
+    STAFF --> REVIEW
+
+    classDef normal fill:#eff6ff,stroke:#2563eb,color:#0f172a
+    classDef decision fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef success fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef warning fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+    class A,B,C,D,E,G,I,J,K,L,M,N,P,Q,R,S,T,U,W,X,Z normal
+    class H,F,O,V,Y decision
+    class START,DONE success
+    class CANCEL,REVIEW warning
