@@ -3,6 +3,7 @@ from verify_common import *
 import sys
 sys.path.insert(0, '/app')
 from renderer import render, Rendered, DiagramSyntaxError, RendererError
+from verify_common import selected_render as render, layout_args, TEST_LAYOUT
 import renderer
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
@@ -24,7 +25,7 @@ def expect_error(callback, code=None, contains=None):
 
 
 def cli(input_path, output=None, *args):
-    command=[sys.executable,'/app/renderer.py',str(input_path),*args]
+    command=[sys.executable,'/app/renderer.py',*layout_args(),str(input_path),*args]
     if output is not None:command+=['--output',str(output)]
     return subprocess.run(command,cwd=ROOT,capture_output=True,text=True,timeout=35)
 
@@ -36,6 +37,7 @@ def artifact_set(directory):
 
 # API contract, independent reraster and immutable return values across retries.
 result=render(SOURCE)
+assert ET.fromstring(result.svg).attrib['data-layout-engine']==TEST_LAYOUT
 assert isinstance(result,Rendered) and isinstance(result.svg,str) and isinstance(result.png,bytes) and isinstance(result.layout,dict)
 assert [n['id'] for n in result.layout['nodes']]==['A','B']
 assert [(e['source'],e['target'],e['ordinal']) for e in result.layout['edges']]==[('A','B',0)]
@@ -284,7 +286,7 @@ print('PASS contract: corrupt dependency output rejected; complete public result
 subprocess.run([sys.executable, '/app/tests/verify_error_taxonomy.py'], check=True, timeout=120)
 
 
-# Output validation checks actual M/L/Q geometry, not merely data-* copies.
+# Output validation checks actual M/L geometry, not merely data-* copies.
 result=render(SOURCE)
 for mutation in ['coordinate','command','ordinal','metadata']:
     svg=ET.fromstring(result.svg)

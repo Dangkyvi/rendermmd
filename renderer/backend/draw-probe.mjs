@@ -1,6 +1,6 @@
 import { parseFlowchart } from "./mermaid-model.mjs";
 import { SourceError } from "./theme-source.mjs";
-import { layoutSubgraphs, CLEARANCE, ancestorObstacles, shortcutRoute, roundedRoute } from "./subgraph-layout.mjs";
+import { layoutSubgraphs } from "./subgraph-layout.mjs";
 
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -129,6 +129,28 @@ try {
     ...group, styles:sourceVertices.find((node) => node.id===group.id)?.styles ?? [],
   }, true));
   const sourceEdges = diagram.db.getEdges();
+  const requestedLayout=process.argv[5]??'dagre';
+  if(!['dagre','elk','auto'].includes(requestedLayout)) throw new Error(`Layout engine không hợp lệ: ${requestedLayout}`);
+  // Versioned policy: count the parsed model, never render candidate layouts.
+  const autoThresholds={nodes:25,edges:35,subgraphs:3,depth:2};
+  const groupParent=new Map();
+  for(const group of sourceGroups) for(const id of group.nodes) if(groupIds.has(id)) {
+    if(groupParent.has(id)&&groupParent.get(id)!==group.id) throw new SourceError(`Subgraph ${id} có nhiều parent.`,'source_structure');
+    groupParent.set(id,group.id);
+  }
+  let maxDepth=0;
+  for(const group of sourceGroups) {
+    let id=group.id,depth=0;const seen=new Set();
+    while(id!==undefined) {
+      if(seen.has(id)) throw new SourceError('Cây subgraph có chu trình.','source_structure');
+      seen.add(id);depth++;id=groupParent.get(id);
+    }
+    maxDepth=Math.max(maxDepth,depth);
+  }
+  const layoutStats={nodes:vertices.length,edges:sourceEdges.length,subgraphs:sourceGroups.length,depth:maxDepth};
+  const useElk=Object.keys(autoThresholds).some(key=>layoutStats[key]>=autoThresholds[key]);
+  const layoutEngine=requestedLayout==='auto'?(useElk?'elk':'dagre'):requestedLayout;
+
   // getEdges() is the order used by linkStyle, not the suffix of edge.id.
   const edgeLabels = sourceEdges.map((edge) =>
     edge.stroke === "invisible" ? "" : edge.text ?? "",
@@ -318,19 +340,20 @@ try {
     );
   });
 
-  const layoutEngine=process.argv[5] ?? 'dagre';
-  const rawEdges=process.argv[6] === 'raw';
-  if (!['dagre','elk'].includes(layoutEngine)) throw new Error(`Layout engine không hợp lệ: ${layoutEngine}`);
+  const elkSpacing=Number(process.argv[7]??1);
   if (layoutEngine === 'elk') {
     const {layoutElk}=await import('./elk-layout.mjs');
-    await layoutElk(graph,sourceGroups,rankdir);
+    await layoutElk(graph,sourceGroups,rankdir,elkSpacing);
   } else if (sourceGroups.length) layoutSubgraphs(dagre, graph, sourceGroups, rankdir);
   else dagre.layout(graph);
   const titleGeometry = measurements.at(-1);
   if (title) {
     const extraWidth = Math.max(0,titleGeometry.path_box[2]+40-graph.graph().width);
     const dx = extraWidth/2, dy = Math.max(titleGeometry.logical_box[3],titleGeometry.path_box[3])+32;
-    for (const id of graph.nodes()) { graph.node(id).x+=dx; graph.node(id).y+=dy; }
+    for (const id of graph.nodes()) {
+      const node=graph.node(id);node.x+=dx;node.y+=dy;
+      if(node.titlePosition) {node.titlePosition.x+=dx;node.titlePosition.y+=dy;}
+    }
     for (const edge of graph.edges()) {
       const data=graph.edge(edge);
       data.points=data.points.map((p)=>({x:p.x+dx,y:p.y+dy}));
@@ -524,8 +547,14 @@ try {
   }
   attribute(svg, "data-renderer-version", process.env.AIZ_RENDERER_VERSION);
   attribute(svg, "data-layout-engine", layoutEngine);
-  if (rawEdges) attribute(svg, "data-edge-postprocessing", "none");
-  attribute(svg, "data-edge-routing", layoutEngine === "elk" ? "elk-orthogonal" : "dagre-existing");
+  if(requestedLayout==='auto') {
+    attribute(svg,'data-layout-requested','auto');
+    attribute(svg,'data-layout-policy','size-groups-v1');
+    attribute(svg,'data-layout-stats',JSON.stringify(layoutStats));
+  }
+  if(layoutEngine==='elk' && elkSpacing!==1) attribute(svg,"data-elk-spacing",elkSpacing);
+  attribute(svg, "data-edge-postprocessing", "none");
+  attribute(svg, "data-edge-routing", layoutEngine === "elk" ? "elk-orthogonal" : "dagre-dijkstra");
   attribute(svg, 
     "viewBox",
     `0 0 ${graph.graph().width} ${graph.graph().height}`,
@@ -625,7 +654,7 @@ try {
     const node = graph.node(sourceGroup.id);
     const x = node.x-node.width/2, y = node.y-node.height/2;
     const [bx,by,bw,bh] = node.geometry.path_box;
-    const tx = node.x-bx-bw/2, ty = y+14-by;
+    const tx = (node.titlePosition?.x??node.x)-bx-bw/2, ty = (node.titlePosition?.y??y+14)-by;
     const group = add(svg, "g", {
       id: sourceGroup.id,
       "data-subgraph-box": JSON.stringify([x,y,node.width,node.height]),
@@ -634,6 +663,22 @@ try {
     });
     add(group, "rect", {x,y,width:node.width,height:node.height,...shapePaint(node.appearance)});
     add(group, "path", {d:node.geometry.path,transform:`translate(${tx} ${ty})`,...glyphAttributes(node.geometry,node.appearance)});
+  }
+
+  // ELK's off-centre ports must retain their horizontal/vertical approach.
+  // A ray from the centre redirects that line and can cut neighbouring nodes.
+  function orthogonalBoundaryPoint(node, boundary, neighbor) {
+    const horizontal=Math.abs(neighbor.x-boundary.x)>Math.abs(neighbor.y-boundary.y);
+    const sign=Math.sign(horizontal?neighbor.x-node.x:neighbor.y-node.y);
+    let lo=-Math.PI/2+1e-9,hi=Math.PI/2-1e-9,result;
+    for(let i=0;i<48;i++) {
+      const angle=(lo+hi)/2;
+      const toward=horizontal?{x:node.x+sign*Math.cos(angle)*node.width,y:node.y+Math.sin(angle)*node.height}:
+        {x:node.x+Math.sin(angle)*node.width,y:node.y+sign*Math.cos(angle)*node.height};
+      result=boundaryPoint(node,toward);
+      if((horizontal?result.y-boundary.y:result.x-boundary.x)<0) lo=angle;else hi=angle;
+    }
+    return horizontal?{x:result.x,y:boundary.y}:{x:boundary.x,y:result.y};
   }
 
   for (const edge of graph.edges()) {
@@ -646,27 +691,11 @@ try {
     // Cluster routing already chose a port on the actual rectangle. Leaves
     // still use the exact intersection for their own shape.
     const startPoint = data.clusterRoute && graph.node(edge.v).isSubgraph
-      ? points[0] : boundaryPoint(graph.node(edge.v), data.points[1]);
+      ? points[0] : layoutEngine==='elk' ? orthogonalBoundaryPoint(graph.node(edge.v),points[0],points[1]) : boundaryPoint(graph.node(edge.v), data.points[1]);
     const endPoint = data.clusterRoute && graph.node(edge.w).isSubgraph
-      ? points.at(-1) : boundaryPoint(graph.node(edge.w), data.points.at(-2));
+      ? points.at(-1) : layoutEngine==='elk' ? orthogonalBoundaryPoint(graph.node(edge.w),points.at(-1),points.at(-2)) : boundaryPoint(graph.node(edge.w), data.points.at(-2));
     points[0] = startPoint;
     points[points.length - 1] = endPoint;
-    const box=(n,pad=0)=>[n.x-n.width/2-pad,n.y-n.height/2-pad,n.x+n.width/2+pad,n.y+n.height/2+pad];
-    const contains=(id,child)=>id===child || sourceGroups.find(g=>g.id===id)?.nodes.some(n=>contains(n,child));
-    const obstacles=[];
-    for(const id of graph.nodes()) {
-      const n=graph.node(id), endpoint=id===edge.v||id===edge.w;
-      if(n.isSubgraph && ((id!==edge.v&&contains(id,edge.v))||(id!==edge.w&&contains(id,edge.w))))
-        obstacles.push(...ancestorObstacles(box(n),n.header));
-      else if(n.isSubgraph && endpoint) obstacles.push(box(n),...ancestorObstacles(box(n),n.header));
-      else obstacles.push(box(n,CLEARANCE));
-    }
-    for(const other of graph.edges()) {
-      const d=graph.edge(other);
-      if(d.ordinal!==data.ordinal&&d.hasLabel) obstacles.push([d.x-d.width/2-CLEARANCE,d.y-d.height/2-CLEARANCE,d.x+d.width/2+CLEARANCE,d.y+d.height/2+CLEARANCE]);
-    }
-    const waypoint=data.hasLabel?{x:data.x,y:data.y}:null;
-    if (!rawEdges) points=shortcutRoute(points,obstacles,waypoint,edge.v===edge.w);
     const [startArrow, endArrow] = data.arrows;
     const markerAttributes = {};
     if (startArrow) {
@@ -677,17 +706,14 @@ try {
       const extent = shortenEndpoint(points, false);
       markerAttributes["marker-end"] = `url(#${markerFor(endArrow, data.appearance.markerColor, extent)})`;
     }
-    const rounded=rawEdges ? {
-      d:points.map((p,i)=>`${i===0?'M':'L'} ${p.x} ${p.y}`).join(' '),
-      radii:points.map(()=>0),
-    } : roundedRoute(points,obstacles,waypoint);
+    const pathData=points.map((p,i)=>`${i===0?'M':'L'} ${p.x} ${p.y}`).join(' ');
     add(svg, "path", {
       "data-source": edge.v,
       "data-target": edge.w,
       "data-ordinal": data.ordinal,
       "data-points": JSON.stringify(points.map(p=>[p.x,p.y])),
-      "data-corner-radii": JSON.stringify(rounded.radii),
-      d: rounded.d,
+      "data-corner-radii": JSON.stringify(points.map(()=>0)),
+      d: pathData,
       fill: "none",
       ...Object.fromEntries(Object.entries(shapePaint(data.appearance)).filter(([key])=>key!=="fill")),
       ...markerAttributes,

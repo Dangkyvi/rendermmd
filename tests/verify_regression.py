@@ -8,10 +8,11 @@ import hashlib
 import sys
 sys.path.insert(0, '/app')
 from renderer import RendererError, render, RENDERER_VERSION
+from verify_common import selected_render as render, layout_args, TEST_LAYOUT
 
 ROOT = Path('/output/regression')
 ROOT.mkdir()
-report = {'status': 'running', 'renderer_version': RENDERER_VERSION, 'cases': [],
+report = {'status': 'running', 'layout_engine': TEST_LAYOUT, 'renderer_version': RENDERER_VERSION, 'cases': [],
           'benchmark_25_35': {'status': 'unverified', 'measurements': None},
           'private_tests': 'unverified: not available', 'mentor_v1_scope': 'not decided here'}
 REPORT = ROOT / 'report.json'
@@ -136,7 +137,7 @@ def main():
         input_path = ROOT / f'unsupported-{index}.mmd'
         input_path.write_text(source)
         destination = ROOT / f'unsupported-{index}'
-        failed = subprocess.run([sys.executable, '/app/renderer.py', str(input_path), '--output', str(destination)], capture_output=True, text=True, timeout=35)
+        failed = subprocess.run([sys.executable, '/app/renderer.py',*layout_args(), str(input_path), '--output', str(destination)], capture_output=True, text=True, timeout=35)
         assert failed.returncode != 0 and not destination.exists()
         detail = json.loads(failed.stderr)
         assert detail['kind'] == 'source' and detail['category']=='source' and detail['code'] == 'unsupported', detail
@@ -151,7 +152,7 @@ def main():
         path = ROOT / 'invalid.mmd'
         path.write_text(bad)
         out = ROOT / ('invalid-' + name)
-        failed = subprocess.run([sys.executable, '/app/renderer.py', str(path), '--output', str(out)], capture_output=True, text=True, timeout=35)
+        failed = subprocess.run([sys.executable, '/app/renderer.py',*layout_args(), str(path), '--output', str(out)], capture_output=True, text=True, timeout=35)
         assert failed.returncode != 0 and not out.exists(), (name, failed.stdout)
         detail = json.loads(failed.stderr)
         assert detail['kind'] == 'syntax' and type(detail['line']) is int and 1 <= detail['line'] <= len(bad.splitlines()) + 1, detail

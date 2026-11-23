@@ -144,7 +144,7 @@ print('PASS theme-labels: long title expands viewBox without cropping or coordin
 # Fail closed on configuration/code/resource/style injection and unknown fonts.
 def rejects(source,part,allow_syntax=False):
     Path('/output/input.mmd').write_text(source)
-    result=subprocess.run(['python3','/app/renderer.py','/output/input.mmd','--output','/output/rejected'],capture_output=True,text=True,timeout=30)
+    result=subprocess.run(['python3','/app/renderer.py',*layout_args(),'/output/input.mmd','--output','/output/rejected'],capture_output=True,text=True,timeout=30)
     assert result.returncode!=0,source
     error=json.loads(result.stderr)
     assert error['category']=='source' and error['kind'] in ['syntax','source'],error
@@ -232,7 +232,7 @@ print('PASS theme-labels: subgraph class font sizes reserve actual title space')
 rejects('flowchart TB\nA["<b>bold</b>"]\n','HTML chưa hỗ trợ')
 rejects('flowchart TB\nA["`**bold**`"]\n','Markdown chưa')
 Path('/output/input.mmd').write_text('---\nconfig:\n  theme: [base\n---\nflowchart TB\nA\n')
-error_run=subprocess.run(['python3','/app/renderer.py','/output/input.mmd','--output','/output/rejected'],capture_output=True,text=True)
+error_run=subprocess.run(['python3','/app/renderer.py',*layout_args(),'/output/input.mmd','--output','/output/rejected'],capture_output=True,text=True)
 assert error_run.returncode!=0
 error=json.loads(error_run.stderr)
 assert error['kind']=='syntax' and isinstance(error['line'],int) and error['line']>=3

@@ -1,0 +1,20 @@
+flowchart LR
+  subgraph Backend ["Backend"]
+    API["API"]
+    subgraph Worker ["Worker"]
+      DocJob["Đọc Job"] --> XuLyJob["Xử lý Job"]
+    end
+    subgraph Audit ["Audit"]
+      Save["Ghi log"] --> Done["Hoàn tất"]
+    end
+    API --> DocJob
+    XuLyJob --> Save
+  end
+  subgraph Client ["Client"]
+    UI["Giao diện"] --> View["Hiển thị"]
+  end
+  XuLyJob -->|kết quả| UI
+  XuLyJob -.->|sự kiện| UI
+  Client --> Backend
+  linkStyle 5 stroke:#d97706,stroke-width:2px
+  linkStyle 6 stroke:#7c3aed,stroke-width:2px

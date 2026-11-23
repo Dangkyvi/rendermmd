@@ -1,0 +1,23 @@
+flowchart TB
+    A([Nhận hồ sơ]) --> B[Đọc thông tin]
+    B --> C{Chọn chế độ}
+    P[Quy tắc nghiệp vụ]
+    Q[Kho cách ly]
+    R[Tổng hợp báo cáo]
+    Z([Hoàn tất])
+
+    subgraph SG["Bộ kiểm tra"]
+        direction TB
+        S1[Tiếp nhận hồ sơ] --> S2[Kiểm tra cấu trúc]
+        S2 --> S3{Dữ liệu hợp lệ?}
+        S3 -->|Có| S4[Chấm điểm]
+        S3 -->|Không| S5[Ghi lý do lỗi]
+    end
+
+    C -->|Kiểm tra toàn bộ| SG
+    C -->|Chỉ chấm điểm| S4
+    P -.->|Điều kiện| S3
+    S4 -->|Điểm số| R
+    S5 -->|Hồ sơ lỗi| Q
+    Q --> R
+    R --> Z

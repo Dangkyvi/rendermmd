@@ -1,5 +1,9 @@
 # Đối chiếu renderer với R1–R8
 
+Đối chiếu riêng chế độ ELK sau khi chỉ giữ hai luồng Dagre/ELK, ngày
+23/11/2026: [elk-requirements-audit.md](elk-requirements-audit.md).
+Các snapshot dưới đây là lịch sử; không dùng chúng để xác nhận revision mới.
+
 Nguồn chuẩn: [requirements.md](requirements.md),
 đang ở trạng thái bản nháp/chưa chốt. Bảng này không tự thay đổi tiêu chí hay
 quyết định danh sách diagram v1.

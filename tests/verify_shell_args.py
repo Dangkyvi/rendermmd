@@ -35,26 +35,28 @@ with tempfile.TemporaryDirectory(prefix='aiz shell argv ') as temporary:
     driver_path.write_text(driver)
     capture = Path(temporary) / 'captured argv'
     base = os.environ.copy()
-    for key in ['RENDERER_PLATFORM', 'RENDERER_IMAGE', 'DOCKER_TEST_EXIT']:
+    for key in ['RENDERER_PLATFORM', 'RENDERER_IMAGE', 'DOCKER_TEST_EXIT', 'VERIFY_LAYOUT']:
         base.pop(key, None)
     base['ARGV_CAPTURE'] = str(capture)
     # Include an invalid-for-Docker value only to verify shell word boundaries;
     # this test does not claim that Docker accepts such a platform/image name.
-    cases = [(None, None), ('', None), ('linux/arm64', None),
-             ('linux/amd64', None), ('platform with spaces *', 'image with spaces *')]
-    for platform, image in cases:
+    cases = [(None, None, None), ('', None, None), ('linux/arm64', None, 'dagre'),
+             ('linux/amd64', None, 'elk'), ('platform with spaces *', 'image with spaces *', 'elk')]
+    for platform, image, layout in cases:
         env = base.copy()
         if platform is not None:
             env['RENDERER_PLATFORM'] = platform
         if image is not None:
             env['RENDERER_IMAGE'] = image
+        if layout is not None:
+            env['VERIFY_LAYOUT'] = layout
         expected = ['run', '--rm']
         if platform:
             expected += ['--platform', platform]
         expected += ['--network', 'none', '--read-only', '--memory', '2g', '--memory-swap', '2g',
                      '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--ulimit', 'cpu=300:300',
                      '--ulimit', 'nofile=256:256', '--ulimit', 'fsize=268435456:268435456',
-                     '--entrypoint', 'python3']
+                     '--entrypoint', 'python3', '-e', f'VERIFY_LAYOUT={layout or "dagre"}']
         for filename in ['draw-probe.mjs', 'text_geometry.py', 'subgraph-layout.mjs','elk-layout.mjs',
                          'theme-source.mjs', 'mermaid-model.mjs', '__init__.py', 'renderer.py', 'runtime_version.py']:
             subdir = 'backend/' if filename.endswith('.mjs') or filename == 'text_geometry.py' else ''

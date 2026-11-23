@@ -50,7 +50,7 @@ else:
     print('PASS runtime: enforced seccomp AF_UNIX/ptrace/mount/namespace restrictions and resource probes')
 def renderer_command(input_path,out):
     prefix=[sys.executable,'/app/tests/runtime_guard.py'] if restricted else [sys.executable]
-    return [*prefix,'/app/renderer.py',str(input_path),'--output',str(out)]
+    return [*prefix,'/app/renderer.py',*layout_args(),str(input_path),'--output',str(out)]
 
 sources=[
     (APP/'tests/fixtures/theme-labels.mmd').read_text(),
@@ -120,7 +120,7 @@ print('PASS runtime: unsafe source rejected; active SVG, external references and
 trap=ROOT/'trap.cjs';trap.write_text('require("fs").writeFileSync("/output/PRELOAD-EXECUTED","bad")')
 input_path=ROOT/'env.mmd';input_path.write_text(sources[0]);out=ROOT/'env-output'
 env=os.environ.copy();env.update({'NODE_OPTIONS':f'--require={trap}','FONTCONFIG_FILE':'/output/does-not-exist','PYTHONPATH':'/output/does-not-exist','TZ':'Asia/Ho_Chi_Minh','LC_ALL':'C'})
-completed=subprocess.run([sys.executable,'/app/renderer.py',str(input_path),'--output',str(out)],env=env,capture_output=True,text=True,timeout=35)
+completed=subprocess.run([sys.executable,'/app/renderer.py',*layout_args(),str(input_path),'--output',str(out)],env=env,capture_output=True,text=True,timeout=35)
 assert completed.returncode==0,completed.stderr
 assert not Path('/output/PRELOAD-EXECUTED').exists()
 assert {name:sha(out/name) for name in ['diagram.svg','diagram.png','layout.json']}==digests[0]
@@ -130,7 +130,7 @@ for name in ['draw-probe.mjs','text_geometry.py','subgraph-layout.mjs','elk-layo
 (copy/'draw-probe.mjs').write_text((copy/'draw-probe.mjs').read_text()+'\n// identity probe\n')
 assert renderer_version(copy)!=RENDERER_VERSION
 print('PASS runtime: ambient environment/preload sanitized; backend changes alter RENDERER_VERSION')
-report={'platform':manifest['platform'],'renderer_version':RENDERER_VERSION,'digests':digests,'tested_policy':policy,
+report={'platform':manifest['platform'],'layout_engine':TEST_LAYOUT,'renderer_version':RENDERER_VERSION,'digests':digests,'tested_policy':policy,
         'status':'passed' if restricted else 'unverified','resource_configuration':{'ram_bytes':2*1024**3,'cpu_rlimit_seconds':300,'nofile':256,'fsize_bytes':268435456},'unverified':[*(['additional AF_UNIX/ptrace/mount/namespace seccomp filter'] if not restricted else []),'private office_sandbox.py/Landlock path policy','300 CPU-second exhaustion','2 GiB exhaustion','native execution when platform uses emulation']}
 (ROOT/'runtime-report.json').write_text(json.dumps(report,sort_keys=True,indent=2)+'\n')
 print('RUNTIME_REPORT '+json.dumps(report,sort_keys=True))

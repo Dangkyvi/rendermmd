@@ -1,35 +1,17 @@
 // Pure geometry regressions run offline alongside the edge integration suite.
 import assert from 'node:assert/strict';
-import {segmentClear,segmentHitsBox,quadraticHitsBox,roundedRoute,shortcutRoute,orthogonalRoute,ancestorObstacles,labelOnRoute} from '../subgraph-layout.mjs';
+import {segmentClear,segmentHitsBox,orthogonalRoute,ancestorObstacles,labelOnRoute} from '../subgraph-layout.mjs';
 const p=(x,y)=>({x,y});
 const box=[4,4,6,6];
 assert(!segmentHitsBox(p(0,0),p(0,10),box));
 assert(!segmentHitsBox(p(0,0),p(0,0),box));
-assert(!segmentClear(p(0,0),p(10,10),[box]),'valid endpoints do not imply a valid shortcut');
-const around=[p(-2,0),p(0,0),p(0,10),p(10,10),p(12,10)];
-const shortcut=shortcutRoute(around,[box],null);
-assert(shortcut.length>3);
-assert(shortcut.slice(1).every((q,i)=>segmentClear(shortcut[i],q,[box])));
-const label=around[2];
-assert(shortcutRoute(around,[],label).includes(label),'own label waypoint must survive');
-assert.deepEqual(shortcutRoute(around,[],null,true),around,'self-loop geometry survives');
-const corner=[p(0,10),p(10,10),p(10,0)];
-const obstacle=[8,8,9.8,9.8];
-assert(corner.slice(1).every((q,i)=>segmentClear(corner[i],q,[obstacle])));
-assert(quadraticHitsBox(p(6,10),p(10,10),p(10,6),obstacle),'rounding can collide even when both legs are clear');
-const rounded=roundedRoute(corner,[obstacle]);
-assert(rounded.radii[1]<4);
-const r=rounded.radii[1];
-assert(!quadraticHitsBox(p(10-r,10),p(10,10),p(10,10-r),obstacle));
-assert.equal(roundedRoute(corner,[[8,8,10,10]]).radii[1],0,'retain sharp corner if no safe curve fits');
-assert.equal(roundedRoute([p(0,0),p(5,0),p(10,0)],[]).radii[1],0);
-assert.equal(roundedRoute(corner,[],corner[1]).radii[1],0,'preserve label waypoint');
+assert(!segmentClear(p(0,0),p(10,10),[box]),'a segment must avoid the obstacle throughout its length');
 const bands=ancestorObstacles([0,0,100,100],20);
 assert(segmentClear(p(-20,50),p(20,50),bands));
 assert(!segmentClear(p(5,30),p(5,80),bands),'no parallel travel next to ancestor border');
 assert(!segmentClear(p(30,-10),p(30,40),bands),'title is solid');
 assert.throws(()=>orthogonalRoute([{boundary:p(0,5),gate:p(10,5)}],[{boundary:p(20,5),gate:p(20,5)}],[[4,4,6,6]],[0,0,25,10]),'blocked boundary-to-gate lead must be rejected');
-console.log('PASS routing: diagonal intersections, protected labels/leads/self-loops, quadratic collision reduction/fallback, ancestor bands');
+console.log('PASS routing: segment intersections, blocked endpoint leads and ancestor title/border bands');
 const sourceHalo=Object.assign([-10,-10,10,20],{endpoint:'A'});
 const targetHalo=Object.assign([40,-10,60,20],{endpoint:'B'});
 const withHalos=orthogonalRoute([{boundary:p(0,5),gate:p(16,5),node:'A'}],[{boundary:p(50,5),gate:p(34,5),node:'B'}],[sourceHalo,targetHalo],[-20,-20,70,30]);
@@ -44,3 +26,24 @@ assert.equal(labelOnRoute(labelRoute,200,10,[],[-30,-30,160,30]),null,'retain or
 assert.equal(labelOnRoute(labelRoute,20,10,[[16,-20,116,20]],[-30,-30,160,30]),null,'whole label clearance box must fit');
 assert.equal(labelOnRoute(labelRoute,20,10,[],[-30,-30,160,30],[[p(16,0),p(116,0)]]),null,'moving a label must not cover an already routed edge');
 console.log('PASS routing: labels on actual route, protected leads, clearance and optional fallback');
+
+// Same endpoints, same hard geometry. Occupancy must influence the chosen
+// Dijkstra route, rather than merely changing metadata or postprocessing it.
+const ends=[{boundary:p(100,0),gate:p(100,0)}],starts=[{boundary:p(0,0),gate:p(0,0)}];
+const occupied=[p(0,0),p(100,0)],frame=[0,-30,100,30];
+const baseline=orthogonalRoute(starts,ends,[],frame);
+const separated=orthogonalRoute(starts,ends,[],frame,{wires:[occupied]});
+assert(baseline.every(q=>q.y===0));
+assert(separated.some(q=>Math.abs(q.y)>=12),'use a separate lane instead of retracing the occupied wire');
+assert.deepEqual(separated,orthogonalRoute(starts,ends,[],frame,{wires:[occupied]}),'stable tie breaking');
+const bends=ps=>ps.slice(1,-1).filter((b,i)=>{
+  const a=ps[i],c=ps[i+2];return Math.abs((b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x))>1e-7;
+}).length;
+assert.equal(bends(separated),2,'two bends suffice for a parallel bypass');
+const blocked=[40,-20,60,20];
+const aroundBlock=orthogonalRoute(starts,ends,[blocked],frame,{wires:[occupied]});
+assert(aroundBlock.slice(1).every((q,i)=>segmentClear(aroundBlock[i],q,[blocked])),'soft wire costs cannot bypass hard obstacles');
+const crossing=[p(50,-10),p(50,10)];
+const avoidCrossing=orthogonalRoute(starts,ends,[],frame,{wires:[crossing]});
+assert(avoidCrossing.some(q=>Math.abs(q.y)>=12),'a modest detour avoids a crossing');
+console.log('PASS Dijkstra: occupied lanes, crossing costs, two-bend bypass, hard obstacles and deterministic output');

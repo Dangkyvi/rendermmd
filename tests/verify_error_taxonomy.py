@@ -9,6 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, '/app')
 import renderer
 from renderer import render, DiagramSyntaxError, DiagramSourceError, RendererError
+from verify_common import selected_render as render, layout_args, TEST_LAYOUT
 from runtime_version import BACKEND_FILES
 
 ROOT = Path('/output/error-taxonomy')
@@ -58,7 +59,7 @@ for name, source, kind, code in cases:
     expect(lambda source=source: render(source), name+'-api', kind, code)
     path=ROOT/(name+'.mmd');path.write_text(source)
     destination=ROOT/(name+'-output')
-    result=subprocess.run([sys.executable, '/app/renderer.py', str(path), '--output', str(destination)], capture_output=True, text=True, timeout=35)
+    result=subprocess.run([sys.executable, '/app/renderer.py',*layout_args(), str(path), '--output', str(destination)], capture_output=True, text=True, timeout=35)
     assert result.returncode==1 and not destination.exists(), (name, result.stdout, result.stderr)
     detail=json.loads(result.stderr)
     assert detail['kind']==kind and detail['code']==code and detail['category']=='source', (name,detail)
@@ -125,7 +126,7 @@ with patch.object(text_geometry.PangoCairo, 'create_layout', return_value=EmptyL
     else:raise AssertionError('missing packaged fonts accepted')
 
 bad_utf8=ROOT/'invalid-utf8.mmd';bad_utf8.write_bytes(b'\xff')
-result=subprocess.run([sys.executable, '/app/renderer.py', str(bad_utf8), '--output', str(ROOT/'invalid-utf8-output')],capture_output=True,text=True,timeout=35)
+result=subprocess.run([sys.executable, '/app/renderer.py',*layout_args(), str(bad_utf8), '--output', str(ROOT/'invalid-utf8-output')],capture_output=True,text=True,timeout=35)
 detail=json.loads(result.stderr)
 assert result.returncode==1 and detail['kind']=='source' and detail['category']=='source' and detail['code']=='invalid_source',detail
 assert not (ROOT/'invalid-utf8-output').exists()
@@ -140,7 +141,7 @@ for name,args,code in [
     ('invalid-scale', [str(valid),'--scale','0'], 'invalid_argument'),
     ('cli-timeout', [str(valid),'--timeout','0.001','--output',str(ROOT/'timed-out')], 'timeout'),
 ]:
-    result=subprocess.run([sys.executable,'/app/renderer.py',*args],capture_output=True,text=True,timeout=35)
+    result=subprocess.run([sys.executable,'/app/renderer.py',*layout_args(),*args],capture_output=True,text=True,timeout=35)
     assert result.returncode==1, (name,result.stdout,result.stderr)
     detail=json.loads(result.stderr)
     assert detail['kind']=='engine' and detail['category']=='engine' and detail['code']==code, (name,detail)

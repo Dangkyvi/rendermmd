@@ -12,13 +12,26 @@ import cairo
 APP = Path('/app')
 OUT = Path('/output/result')
 NS = {'s': 'http://www.w3.org/2000/svg'}
+TEST_LAYOUT = os.environ.get('VERIFY_LAYOUT', 'dagre')
+assert TEST_LAYOUT in ('dagre', 'elk'), TEST_LAYOUT
+
+def layout_args():
+    # The default run still exercises the public default, without an override.
+    return ['--layout', 'elk'] if TEST_LAYOUT == 'elk' else []
+
+def selected_render(*args, **kwargs):
+    import renderer
+    kwargs.setdefault('layout', TEST_LAYOUT)
+    return renderer.render(*args, **kwargs)
 
 def run(source):
     Path('/output/input.mmd').write_text(source)
     # Only this disposable test container owns this output; renderer never deletes it.
     shutil.rmtree(OUT, ignore_errors=True)
-    subprocess.run(['python3', '/app/renderer.py', '/output/input.mmd', '--output', str(OUT)], check=True, timeout=35)
+    subprocess.run(['python3', '/app/renderer.py', '/output/input.mmd', '--output', str(OUT), *layout_args()], check=True, timeout=35)
     root = ET.parse(OUT / 'diagram.svg').getroot()
+    assert root.attrib['data-layout-engine'] == TEST_LAYOUT
+    assert root.attrib['data-edge-postprocessing'] == 'none'
     layout = json.loads((OUT / 'layout.json').read_text())
     # Raster must be the very SVG returned, at default 2x; decode pixel data too.
     subprocess.run(['rsvg-convert', '--zoom=2', '--output=/output/check.png', str(OUT / 'diagram.svg')], check=True)
@@ -33,6 +46,8 @@ def run(source):
     for edge in layout['edges']:
         line = root.find(f"s:path[@data-ordinal='{edge['ordinal']}']", NS)
         assert line is not None
+        assert all(r == 0 for r in edge['corner_radii'])
+        assert set(re.findall(r'[A-Za-z]', line.attrib['d'])) <= {'M', 'L', 'e'}
         points = json.loads(line.attrib['data-points'])
         assert edge['points'] == points
         assert len(points) >= 2 and all(math.isfinite(n) for p in points for n in p)

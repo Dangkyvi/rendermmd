@@ -71,7 +71,9 @@ export function layoutSubgraphs(dagre, graph, groups, rankdir) {
       const data = graph.edge(edge);
       local.setEdge(v, w, {width:data.width, height:data.height, labelpos:'c', minlen:data.minlen}, edge.name);
     }
-    if (local.nodeCount()) dagre.layout(local);
+    if (local.nodeCount()) {
+      dagre.layout(local);
+    }
     else local.setGraph({...local.graph(), width:56, height:40});
     let width = local.graph().width, height = local.graph().height;
     let dx = 0, dy = 0;
@@ -120,6 +122,9 @@ export function layoutSubgraphs(dagre, graph, groups, rankdir) {
       const d = graph.edge(e);
       return {ordinal:d.ordinal, box:[d.x-d.width/2-CLEARANCE,d.y-d.height/2-CLEARANCE,d.x+d.width/2+CLEARANCE,d.y+d.height/2+CLEARANCE]};
     });
+  // Local Dagre paths and earlier routed edges occupy space, without becoming
+  // hard obstacles: crossings remain possible when the topology requires them.
+  const wires=edges.filter(e=>graph.edge(e).direct&&!graph.edge(e).invisible).map(e=>graph.edge(e).points);
   for (const edge of edges) {
     const data = graph.edge(edge);
     if (data.direct) continue;
@@ -172,7 +177,7 @@ export function layoutSubgraphs(dagre, graph, groups, rankdir) {
     // Endpoints which are clusters use their actual rectangular boundary.
     // Leaf endpoints are clipped against the existing shape implementation later.
     function routeFor(...args) {
-      try { return orthogonalRoute(...args); }
+      try { return orthogonalRoute(...args,{wires}); }
       catch(e) { throw new Error(`Edge ${edge.v} -> ${edge.w}: ${e.message}`); }
     }
     let route;
@@ -232,6 +237,7 @@ export function layoutSubgraphs(dagre, graph, groups, rankdir) {
     }
     data.points = simplify(route, [route[1],route.at(-2), ...(data.hasLabel ? [{x:data.x,y:data.y}] : [])]);
     data.clusterRoute = true;
+    if(!data.invisible) wires.push(data.points);
   }
 }
 
@@ -302,72 +308,6 @@ export function segmentClear(a,b,obstacles) {
                                                      Math.abs(b.y-a.y)<Math.abs(b.x-a.x)+1e-7)));
 }
 
-// Exact quadratic/rectangle test: rectangle-boundary roots partition t into
-// intervals on which inside/outside cannot change. No sampling gaps.
-export function quadraticHitsBox(a,c,b,box) {
-  const ts=[0,1];
-  for (const [key,min,max] of [['x',box[0]+1e-7,box[2]-1e-7],['y',box[1]+1e-7,box[3]-1e-7]]) {
-    const A=a[key]-2*c[key]+b[key], B=2*(c[key]-a[key]);
-    for (const v of [min,max]) {
-      const C=a[key]-v;
-      if (Math.abs(A)<1e-12) {if (Math.abs(B)>1e-12) ts.push(-C/B);}
-      else {const d=B*B-4*A*C;if(d>=0) ts.push((-B-Math.sqrt(d))/(2*A),(-B+Math.sqrt(d))/(2*A));}
-    }
-  }
-  const sorted=ts.filter(t=>t>=0&&t<=1).sort((x,y)=>x-y);
-  const inside=t=>{
-    const x=(1-t)**2*a.x+2*t*(1-t)*c.x+t*t*b.x;
-    const y=(1-t)**2*a.y+2*t*(1-t)*c.y+t*t*b.y;
-    return x>box[0]+1e-7&&x<box[2]-1e-7&&y>box[1]+1e-7&&y<box[3]-1e-7;
-  };
-  return sorted.some(inside)||sorted.slice(1).some((t,i)=>inside((t+sorted[i])/2));
-}
-
-export function shortcutRoute(points, obstacles, waypoint, selfLoop=false) {
-  if(selfLoop) return points;
-  const result=[...points];
-  // Preserve the endpoint leads and the edge's own label waypoint. Bounded
-  // lookahead keeps this linear in route size rather than testing every pair.
-  for(let pass=0;pass<2;pass++) for(let i=1;i<result.length-2;i++) {
-    for(let j=Math.min(i+6,result.length-2);j>i+1;j--) {
-      if(waypoint && result.slice(i+1,j).some(p=>Math.hypot(p.x-waypoint.x,p.y-waypoint.y)<1e-6)) continue;
-      if(!segmentClear(result[i],result[j],obstacles)) continue;
-      const old=result.slice(i,j+1).reduce((sum,p,k,ps)=>sum+(k?Math.hypot(p.x-ps[k-1].x,p.y-ps[k-1].y):0),0);
-      if(Math.hypot(result[j].x-result[i].x,result[j].y-result[i].y)>old-1e-6) continue;
-      result.splice(i+1,j-i-1);break;
-    }
-  }
-  return result;
-}
-
-export function roundedRoute(points, obstacles, protectedPoint) {
-  const radii=points.map(()=>0), commands=[`M ${points[0].x} ${points[0].y}`];
-  for(let i=1;i<points.length-1;i++) {
-    const a=points[i-1],c=points[i],b=points[i+1];
-    const l1=Math.hypot(a.x-c.x,a.y-c.y),l2=Math.hypot(b.x-c.x,b.y-c.y);
-    const cross=(c.x-a.x)*(b.y-c.y)-(c.y-a.y)*(b.x-c.x);
-    let r=Math.min(12,l1*.4,l2*.4);
-    if(Math.abs(cross)<1e-7 || (protectedPoint&&Math.hypot(c.x-protectedPoint.x,c.y-protectedPoint.y)<1e-6)) r=0;
-    let entry,exit;
-    while(r>=.25) {
-      entry={x:c.x+(a.x-c.x)*r/l1,y:c.y+(a.y-c.y)*r/l1};
-      exit={x:c.x+(b.x-c.x)*r/l2,y:c.y+(b.y-c.y)*r/l2};
-      // For border bands use a conservative hull, so a bend cannot turn and
-      // follow a border while inside its clearance band.
-      if(!obstacles.some(o=>o.crossing ?
-        rectanglesOverlap([Math.min(entry.x,c.x,exit.x),Math.min(entry.y,c.y,exit.y),Math.max(entry.x,c.x,exit.x),Math.max(entry.y,c.y,exit.y)],o) :
-        quadraticHitsBox(entry,c,exit,o))) break;
-      r/=2;
-    }
-    if(r<.25) r=0;
-    radii[i]=r;
-    if(r) commands.push(`L ${entry.x} ${entry.y} Q ${c.x} ${c.y} ${exit.x} ${exit.y}`);
-    else commands.push(`L ${c.x} ${c.y}`);
-  }
-  commands.push(`L ${points.at(-1).x} ${points.at(-1).y}`);
-  return {d:commands.join(' '),radii};
-}
-
 function rectanglesOverlap(a,b) {
   return a[0]<b[2] && a[2]>b[0] && a[1]<b[3] && a[3]>b[1];
 }
@@ -387,80 +327,127 @@ function simplify(points, protectedPoints=[]) {
   return result;
 }
 
-// Rectilinear visibility grid, with deterministic Dijkstra search. Node boxes,
-// unrelated clusters and title bands are obstacles. Boundary contact is allowed.
-export function orthogonalRoute(starts, ends, obstacles, frame) {
+// Dijkstra on (grid point, incoming axis), not just a grid point. All costs
+// are nonnegative: length + bends + shared/near wire length + crossings.
+// Existing wires are soft costs; nodes, group titles and label boxes stay hard.
+export function orthogonalRoute(starts, ends, obstacles, frame, options={}) {
+  const wires=options.wires??[],lane=12;
+  const bendPenalty=options.bendPenalty??24;
+  const sharedPenalty=options.sharedPenalty??40;
+  const nearPenalty=options.nearPenalty??2;
+  const crossingPenalty=options.crossingPenalty??120;
   const inside = (p,b) => p.x>b[0]+1e-7 && p.x<b[2]-1e-7 && p.y>b[1]+1e-7 && p.y<b[3]-1e-7;
   const valid = (p) => p.x>=frame[0] && p.x<=frame[2] && p.y>=frame[1] && p.y<=frame[3] && !obstacles.some((b)=>!b.crossing && inside(p,b));
-  // Only the selected port lead may traverse its own node's clearance halo.
-  // Every other obstacle (including the opposite node) still checks the lead.
   const leadValid=p=>valid(p.gate) && segmentClear(p.boundary,p.gate,
     obstacles.filter(o=>p.node===undefined || o.endpoint!==p.node));
   starts=starts.filter(leadValid); ends=ends.filter(leadValid);
-  const all=[...starts,...ends].map((p)=>p.gate);
-  const xs=[...new Set([frame[0],frame[2],...all.map((p)=>p.x),...obstacles.flatMap((b)=>[b[0],b[2]])])].filter((x)=>x>=frame[0]&&x<=frame[2]).sort((a,b)=>a-b);
-  const ys=[...new Set([frame[1],frame[3],...all.map((p)=>p.y),...obstacles.flatMap((b)=>[b[1],b[3]])])].filter((y)=>y>=frame[1]&&y<=frame[3]).sort((a,b)=>a-b);
-  const nx=xs.length, count=nx*ys.length;
-  const index=(p)=>ys.indexOf(p.y)*nx+xs.indexOf(p.x);
-  const point=(i)=>({x:xs[i%nx],y:ys[Math.floor(i/nx)]});
-  const distance=new Float64Array(count).fill(Infinity);
-  const previous=new Int32Array(count).fill(-1);
-  const startAt=new Map(starts.map((p)=>[index(p.gate),p]));
-  const endAt=new Map(ends.map((p)=>[index(p.gate),p]));
+  const all=[...starts,...ends].map(p=>p.gate);
+  const segments=wires.flatMap(ps=>ps.slice(1).map((b,i)=>[ps[i],b]));
+  // Nearby parallel lanes let the search avoid following an occupied line.
+  // Only axis-aligned wires contribute lanes; original Dagre paths may be diagonal.
+  const wireX=[],wireY=[];
+  for(const [a,b] of segments) {
+    if(a.x===b.x) wireX.push(a.x-lane,a.x+lane);
+    if(a.y===b.y) wireY.push(a.y-lane,a.y+lane);
+  }
+  const xs=[...new Set([frame[0],frame[2],...all.map(p=>p.x),...obstacles.flatMap(b=>[b[0],b[2]]),...wireX])].filter(x=>x>=frame[0]&&x<=frame[2]).sort((a,b)=>a-b);
+  const ys=[...new Set([frame[1],frame[3],...all.map(p=>p.y),...obstacles.flatMap(b=>[b[1],b[3]]),...wireY])].filter(y=>y>=frame[1]&&y<=frame[3]).sort((a,b)=>a-b);
+  const nx=xs.length,count=nx*ys.length;
+  const index=p=>ys.indexOf(p.y)*nx+xs.indexOf(p.x);
+  const point=i=>({x:xs[i%nx],y:ys[Math.floor(i/nx)]});
+  // 0 = horizontal, 1 = vertical, 2 = zero-length endpoint lead.
+  const axis=(a,b)=>a.x===b.x?(a.y===b.y?2:1):0;
+  const distance=new Float64Array(count*3).fill(Infinity);
+  const previous=new Int32Array(count*3).fill(-1);
+  const startAt=new Map(starts.map(p=>[index(p.gate),p]));
+  const endAt=new Map(ends.map(p=>[index(p.gate),p]));
   const heap=[];
   function push(item) {
-    heap.push(item); let i=heap.length-1;
-    while (i) { const p=(i-1)>>1; if (heap[p][0]<=item[0]) break; heap[i]=heap[p]; i=p; }
+    heap.push(item);let i=heap.length-1;
+    while(i) {const p=(i-1)>>1;if(heap[p][0]<=item[0]) break;heap[i]=heap[p];i=p;}
     heap[i]=item;
   }
   function pop() {
-    const first=heap[0], last=heap.pop();
-    if (heap.length) {
+    const first=heap[0],last=heap.pop();
+    if(heap.length) {
       let i=0;
-      while (i*2+1<heap.length) {
+      while(i*2+1<heap.length) {
         let c=i*2+1;
-        if (c+1<heap.length && heap[c+1][0]<heap[c][0]) c++;
-        if (heap[c][0]>=last[0]) break;
-        heap[i]=heap[c]; i=c;
+        if(c+1<heap.length&&heap[c+1][0]<heap[c][0]) c++;
+        if(heap[c][0]>=last[0]) break;
+        heap[i]=heap[c];i=c;
       }
       heap[i]=last;
     }
     return first;
   }
-  for (const [i,p] of startAt) {
-    distance[i]=Math.abs(p.gate.x-p.boundary.x)+Math.abs(p.gate.y-p.boundary.y);
-    push([distance[i],i]);
-  }
-  let winner=-1, best=Infinity;
-  while (heap.length) {
-    const [cost,i]=pop();
-    if (cost!==distance[i]) continue;
-    if (cost>best) break;
-    if (endAt.has(i)) {
-      const e=endAt.get(i);
-      const total=cost+Math.abs(e.gate.x-e.boundary.x)+Math.abs(e.gate.y-e.boundary.y);
-      if (total<best) {best=total;winner=i;}
+  function wireCost(a,b) {
+    let cost=0;const horizontal=a.y===b.y;
+    for(const [c,d] of segments) {
+      const otherHorizontal=c.y===d.y,otherVertical=c.x===d.x;
+      if((horizontal&&otherHorizontal)||(!horizontal&&otherVertical)) {
+        const offset=Math.abs(horizontal?a.y-c.y:a.x-c.x);
+        const shared=horizontal?Math.min(Math.max(a.x,b.x),Math.max(c.x,d.x))-Math.max(Math.min(a.x,b.x),Math.min(c.x,d.x)):
+          Math.min(Math.max(a.y,b.y),Math.max(c.y,d.y))-Math.max(Math.min(a.y,b.y),Math.min(c.y,d.y));
+        if(shared>0&&offset<lane) cost+=shared*(offset<1e-7?sharedPenalty:nearPenalty*(lane-offset)/lane);
+      } else {
+        // Half at each endpoint counts a grid-vertex crossing once, symmetrically.
+        const cross=(u,v)=>u.x*v.y-u.y*v.x;
+        const r={x:b.x-a.x,y:b.y-a.y},q={x:d.x-c.x,y:d.y-c.y},delta={x:c.x-a.x,y:c.y-a.y};
+        const den=cross(r,q);
+        if(Math.abs(den)<1e-9) continue;
+        const t=cross(delta,q)/den,u=cross(delta,r)/den;
+        if(t>=-1e-9&&t<=1+1e-9&&u>1e-9&&u<1-1e-9) cost+=crossingPenalty*(t<1e-9||t>1-1e-9?.5:1);
+      }
     }
-    const p=point(i), ix=i%nx, iy=Math.floor(i/nx);
+    return cost;
+  }
+  const validity=new Int8Array(count),stepCosts=new Map();
+  function stepCost(i,j,p,q) {
+    if(!validity[j]) validity[j]=valid(q)?1:-1;
+    if(validity[j]<0) return Infinity;
+    const key=Math.min(i,j)*count+Math.max(i,j);
+    if(!stepCosts.has(key)) stepCosts.set(key,segmentClear(p,q,obstacles)?Math.abs(p.x-q.x)+Math.abs(p.y-q.y)+wireCost(p,q):Infinity);
+    return stepCosts.get(key);
+  }
+  const dot=(a,b,c,d)=>(b.x-a.x)*(d.x-c.x)+(b.y-a.y)*(d.y-c.y);
+  for(const [i,p] of startAt) {
+    const state=i*3+axis(p.boundary,p.gate);
+    distance[state]=Math.abs(p.gate.x-p.boundary.x)+Math.abs(p.gate.y-p.boundary.y)+wireCost(p.boundary,p.gate);
+    push([distance[state],state]);
+  }
+  let winner=-1,best=Infinity;
+  while(heap.length) {
+    const [cost,state]=pop();
+    if(cost!==distance[state]) continue;
+    if(cost>best) break;
+    const i=Math.floor(state/3),incoming=state%3,p=point(i);
+    if(endAt.has(i)) {
+      const e=endAt.get(i),lastAxis=axis(e.gate,e.boundary);
+      const from=previous[state]<0?startAt.get(i)?.boundary:point(Math.floor(previous[state]/3));
+      if(!from||dot(e.boundary,e.gate,p,from)>=-1e-7) {
+        const total=cost+Math.abs(e.gate.x-e.boundary.x)+Math.abs(e.gate.y-e.boundary.y)+wireCost(e.gate,e.boundary)+
+          (incoming!==2&&lastAxis!==2&&incoming!==lastAxis?bendPenalty:0);
+        if(total<best) {best=total;winner=state;}
+      }
+    }
+    const ix=i%nx,iy=Math.floor(i/nx);
     const adjacent=[ix>0?i-1:-1,ix+1<nx?i+1:-1,iy>0?i-nx:-1,iy+1<ys.length?i+nx:-1];
-    for (const j of adjacent) {
-      if (j<0) continue;
-      const q=point(j);
-      if (!valid(q)) continue;
-      if (!segmentClear(p,q,obstacles)) continue;
-      // A lead must leave the source and approach the destination from outside.
-      const start = previous[i] === -1 ? startAt.get(i) : null;
-      const end = endAt.get(j);
-      const dot = (a,b,c,d) => (b.x-a.x)*(d.x-c.x)+(b.y-a.y)*(d.y-c.y);
-      if (start && dot(start.boundary,start.gate,p,q)<-1e-7) continue;
-      if (end && dot(end.boundary,end.gate,q,p)<-1e-7) continue;
-      const next=cost+Math.abs(p.x-q.x)+Math.abs(p.y-q.y);
-      if (next<distance[j]) {distance[j]=next;previous[j]=i;push([next,j]);}
+    for(const j of adjacent) {
+      if(j<0) continue;
+      const q=point(j),step=stepCost(i,j,p,q);
+      if(!Number.isFinite(step)) continue;
+      const start=previous[state]===-1?startAt.get(i):null,end=endAt.get(j);
+      if(start&&dot(start.boundary,start.gate,p,q)<-1e-7) continue;
+      if(end&&dot(end.boundary,end.gate,q,p)<-1e-7) continue;
+      const outgoing=axis(p,q),nextState=j*3+outgoing;
+      const next=cost+step+(incoming!==2&&incoming!==outgoing?bendPenalty:0);
+      if(next<distance[nextState]) {distance[nextState]=next;previous[nextState]=state;push([next,nextState]);}
     }
   }
-  if (winner<0) throw new Error('Không tìm được đường edge qua ranh giới subgraph mà tránh node/tiêu đề.');
-  const path=[]; let cursor=winner;
-  while (cursor!==-1) {path.push(point(cursor)); if (previous[cursor]===-1) break;cursor=previous[cursor];}
+  if(winner<0) throw new Error('Không tìm được đường edge qua ranh giới subgraph mà tránh node/tiêu đề.');
+  const path=[];let cursor=winner;
+  while(cursor!==-1) {path.push(point(Math.floor(cursor/3)));if(previous[cursor]===-1) break;cursor=previous[cursor];}
   path.reverse();
-  return [startAt.get(cursor).boundary,...path,endAt.get(winner).boundary];
+  return [startAt.get(Math.floor(cursor/3)).boundary,...path,endAt.get(Math.floor(winner/3)).boundary];
 }

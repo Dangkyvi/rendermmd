@@ -4,6 +4,13 @@ Renderer flowchart chạy offline trong Docker, xuất SVG, PNG và layout JSON.
 Không dùng jsdom hoặc tạo `window`/`document`: adapter lấy model từ grammar Mermaid,
 đo chữ bằng Pango và tạo SVG trực tiếp.
 
+Hai chế độ được giữ: `--layout dagre` (mặc định, Dijkstra cải tiến cho cạnh
+xuyên nhóm) và `--layout elk` (ELK layered cho cả bố cục và routing).
+ELK nhận thêm `--elk-spacing 1.5` để giãn node mà giữ kích thước chữ/node.
+Cả hai chế độ giữ đường gốc, không rút ngắn hoặc bo góc; không cần `--raw-edges`.
+BE chọn tự động bằng `layout="auto"` / CLI `--layout auto`: ELK khi có ≥25 node,
+≥35 cạnh, ≥3 subgraph hoặc nhóm lồng ≥2 tầng; còn lại Dagre. Chỉ chạy một engine.
+
 ## Cấu trúc thư mục
 
 ```text
@@ -82,6 +89,8 @@ Các giới hạn Docker và entry point renderer được giữ trong script.
 ```bash
 python3 tests/verify_shell_args.py --bash /bin/bash
 bash scripts/verify.sh all
+# Đối chiếu các bài kiểm tra công khai với ELK được chọn rõ ràng:
+VERIFY_LAYOUT=elk bash scripts/verify.sh all
 # Hoặc một nhóm: edges, subgraphs, theme-labels, contract, runtime, regression
 bash scripts/verify.sh edges
 ```
@@ -94,6 +103,7 @@ Xem [hướng dẫn kỹ thuật](docs/development.md) để ghi log và tổng 
 - [Phân loại lỗi source/engine và cách bắt exception](docs/error-handling.md)
 - [Yêu cầu R1–R8](docs/requirements.md)
 - [Audit hiện tại và phạm vi còn thiếu](docs/renderer-requirements-audit.md)
+- [Đối chiếu riêng ELK và hai chế độ cuối](docs/elk-requirements-audit.md)
 - [Điều tra R1.1](docs/renderer-r1.1-investigation.md)
 - [Cách đọc evidence và lịch sử đường dẫn](evidence/README.md)
 - [Báo cáo verification mới nhất](evidence/verification/latest.json)

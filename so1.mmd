@@ -1,0 +1,26 @@
+flowchart TB
+    A([Nhận yêu cầu]) --> B[Tách dữ liệu]
+
+    B --> C[Kiểm tra định dạng]
+    B --> D[Kiểm tra tài khoản]
+    B --> E[Kiểm tra hạn mức]
+
+    C --> F[Chuẩn hóa dữ liệu]
+    C --> G[Ghi nhật ký]
+    D --> G
+    D --> H[Đánh giá quyền]
+    E --> H
+    E --> I[Tính chi phí]
+
+    F --> J[Tổng hợp kết quả]
+    H --> J
+    I --> J
+
+    J --> K{Đủ điều kiện?}
+    K -->|Có| L[Thực hiện yêu cầu]
+    K -->|Thiếu dữ liệu| M[Bổ sung dữ liệu]
+    M --> C
+
+    L --> N[Tạo phản hồi]
+    G -.->|Mã theo dõi| N
+    N --> O([Hoàn tất])

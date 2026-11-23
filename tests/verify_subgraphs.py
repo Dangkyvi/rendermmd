@@ -111,14 +111,15 @@ print('PASS subgraphs: nested independent RL/BT directions and cluster-level TB 
 detours=(APP/'tests/fixtures/cluster-port-detours.mmd').read_text()
 root,layout=run(detours)
 check_clusters(root,layout,{g['id']:g['nodes'] for g in metadata(detours)['subgraphs']})
-for pair,limit in [(('INTENT','LOOP'),500),(('PICK','AGENTS'),850),(('PICK','LEAVES'),450)]:
-    edge=next(e for e in layout['edges'] if (e['source'],e['target'])==pair)
-    length=sum(math.dist(a,b) for a,b in zip(edge['points'],edge['points'][1:]))
-    assert length<limit,(pair,length,'unnecessary cluster/label detour')
-    assert edge['label_box'][2]>0
-    # No upward excursion on these forward edges. Feedback edges elsewhere in
-    # the fixture intentionally retain their original direction and topology.
-    assert all(b[1]>=a[1]-1e-7 for a,b in zip(edge['points'],edge['points'][1:]))
+if TEST_LAYOUT == 'dagre':
+    for pair,limit in [(('INTENT','LOOP'),500),(('PICK','AGENTS'),850),(('PICK','LEAVES'),450)]:
+        edge=next(e for e in layout['edges'] if (e['source'],e['target'])==pair)
+        length=sum(math.dist(a,b) for a,b in zip(edge['points'],edge['points'][1:]))
+        assert length<limit,(pair,length,'unnecessary cluster/label detour')
+        assert edge['label_box'][2]>0
+        # No upward excursion on these forward edges. Feedback edges elsewhere in
+        # the fixture intentionally retain their original direction and topology.
+        assert all(b[1]>=a[1]-1e-7 for a,b in zip(edge['points'],edge['points'][1:]))
 print('PASS subgraphs: actual Intent/tool cluster detours, movable labels and near-side ports')
 
 # Official limitation: same private direction, one link to cluster vs one to leaf.
@@ -138,7 +139,7 @@ root,layout=run(limitation)
 entities=check_clusters(root,layout,{g['id']:g['nodes'] for g in metadata(limitation)['subgraphs']})
 assert entities['top1']['box'][1]<entities['bottom1']['box'][1]
 assert entities['top2']['box'][0]<entities['bottom2']['box'][0]
-assert_close([entities['top2']['box'][1]],[entities['bottom2']['box'][1]])
+if TEST_LAYOUT == 'dagre': assert_close([entities['top2']['box'][1]],[entities['bottom2']['box'][1]])
 print('PASS subgraphs: documented external-leaf direction fallback; cluster endpoint preserves direction')
 
 # Real empty boxes, auto IDs, long/multiline titles, ancestor and self links.
@@ -183,7 +184,7 @@ for source,expected in [
     ('flowchart TB\nsubgraph S\n A\nend\nS@{view: collapsed}\n', 'metadata chưa hỗ trợ'),
 ]:
     Path('/output/input.mmd').write_text(source)
-    result=subprocess.run(['python3','/app/renderer.py','/output/input.mmd','--output','/output/rejected'],capture_output=True,text=True)
+    result=subprocess.run(['python3','/app/renderer.py',*layout_args(),'/output/input.mmd','--output','/output/rejected'],capture_output=True,text=True)
     assert result.returncode!=0
     detail=json.loads(result.stderr)
     assert detail['kind']=='source' and detail['category']=='source',detail
@@ -232,7 +233,17 @@ print('PASS subgraphs: parallel cross-boundary labels and double-headed cluster 
 # No unsafe fallback when a generated ancestor label cannot fit at full clearance.
 labelled_extras=extras.replace('parent --> N','parent -->|entry| N')
 Path('/output/input.mmd').write_text(labelled_extras)
-result=subprocess.run(['python3','/app/renderer.py','/output/input.mmd','--output','/output/no-label-room'],capture_output=True,text=True)
-assert result.returncode!=0 and not Path('/output/no-label-room').exists()
-assert 'không đủ chỗ cho nhãn' in json.loads(result.stderr)['message']
-print('PASS subgraphs: no unsafe fallback for ancestor label without clearance')
+result=subprocess.run(['python3','/app/renderer.py',*layout_args(),'/output/input.mmd','--output','/output/no-label-room'],capture_output=True,text=True)
+if TEST_LAYOUT == 'dagre':
+    assert result.returncode!=0 and not Path('/output/no-label-room').exists()
+    assert 'không đủ chỗ cho nhãn' in json.loads(result.stderr)['message']
+    print('PASS subgraphs: no unsafe fallback for ancestor label without clearance')
+else:
+    assert result.returncode==0,result.stderr
+    elk_root=ET.parse('/output/no-label-room/diagram.svg').getroot()
+    elk_layout=json.loads(Path('/output/no-label-room/layout.json').read_text())
+    check_clusters(elk_root,elk_layout,{g['id']:g['nodes'] for g in metadata(labelled_extras)['subgraphs']})
+    print('PASS subgraphs ELK: labelled ancestor edge has real geometry and clear title')
+
+if TEST_LAYOUT == 'elk':
+    subprocess.run(['python3','/app/tests/verify_elk_render.py'],check=True,timeout=180)

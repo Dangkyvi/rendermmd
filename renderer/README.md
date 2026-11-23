@@ -57,7 +57,34 @@ engine. CLI không ghi đè output đã tồn tại, dọn scratch mỗi lượt
 background worker/state giữ giữa các request. Legacy Node CLI trong source là
 `node backend/draw-probe.mjs ...` khi môi trường đã chuẩn bị đầy đủ.
 
-## ELK thử nghiệm
+## Hai chế độ bố cục
+
+BE có thể dùng `render(source, layout="auto")` hoặc CLI `--layout auto`.
+Policy `size-groups-v1` chọn ELK nếu có ít nhất 25 node, 35 cạnh, 3 subgraph
+hoặc độ sâu subgraph từ 2; các trường hợp còn lại chọn Dagre. Các điều kiện
+nối bằng OR. Node không bao gồm khung nhóm; cạnh song song tính riêng; nhóm
+ngoài cùng có độ sâu 1. Số liệu lấy từ model Mermaid đã parse. Chỉ engine
+được chọn chạy, không render thử hai engine và không fallback sang engine kia.
+SVG ghi engine thực tế, policy và số liệu chọn trong các thuộc tính `data-layout-*`.
+`elk_spacing` áp dụng khi auto chọn ELK. Đây là heuristic đã chốt, chưa bảo
+đảm tối ưu thẩm mỹ cho mọi source. Lời gọi cũ không truyền layout vẫn dùng
+Dagre; các lựa chọn tường minh `dagre`/`elk` tiếp tục hoạt động.
+
+`--layout dagre` là mặc định. Cạnh nội bộ đơn giản giữ đường Dagre; cạnh
+xuyên nhóm/nối trực tiếp vào nhóm dùng Dijkstra trong `orthogonalRoute`.
+Dijkstra lưu trạng thái `(điểm lưới, trục đi vào)` để tính đúng chi phí bẻ
+góc. Hàm mục tiêu gồm chiều dài, số góc, đoạn trùng, khoảng cách giữa dây
+và giao cắt; các làn cách dây có sẵn 12 đơn vị bổ sung vào lưới. Node, nhãn
+và tiêu đề nhóm vẫn là vật cản cứng. Đây là heuristic về độ dễ đọc, không
+bảo đảm không có giao cắt hay tìm bố cục tối ưu toàn cục.
+
+`--layout elk` dùng ELK layered cho cả bố cục, vị trí nhãn và đường cạnh,
+kể cả cạnh xuyên nhóm. Không gọi Dijkstra hoặc `dagre.layout`. Cả hai chế
+độ dùng chung parser, đo chữ, vẽ SVG/marker và raster PNG. Code của chế độ
+lai đã được loại bỏ; các hình trong artifacts/ từ những lần thử cũ được giữ
+làm lịch sử, không được dùng làm bằng chứng cho revision hiện tại.
+
+## Dùng ELK
 
 Dagre vẫn là mặc định. Chọn engine bằng keyword mới hoặc CLI; các positional
 argument scale/timeout và schema Rendered/layout cũ giữ nguyên:
@@ -76,10 +103,9 @@ RENDERER_IMAGE=aiz-render-runtime:elk-experimental bash scripts/render.sh \
 offline, không cần browser/Chrome. Backend chỉ import ELK khi được chọn.
 SVG có `data-layout-engine` và `data-edge-routing` để xác minh engine thực tế.
 
-Thêm `--raw-edges` cho Python/Node CLI, `scripts/render.sh` hoặc
-`scripts/compare_layouts.py` để bỏ qua cả `shortcutRoute` và `roundedRoute`.
-API tương ứng là `render(source, layout="elk", raw_edges=True)`. Hai hàm vẫn
-được giữ và chạy như cũ khi không bật flag. Chế độ này nối các routing point
+Cả Dagre và ELK luôn giữ đường gốc; đã loại bỏ phần rút ngắn đường và bo góc
+cùng các helper chỉ phục vụ chúng. `--raw-edges` và API `raw_edges` vẫn được
+chấp nhận để tương thích lệnh cũ, không còn thay đổi kết quả. Đường gốc nối các routing point
 bằng đoạn thẳng M/L, không rút gọn, không bo góc; vẫn căn endpoint vào biên
 shape và chừa chỗ cho mũi tên. Với Dagre, các cạnh xuyên nhóm vẫn qua router
 `orthogonalRoute` hiện có; với ELK, routing point do ELK cung cấp.
@@ -87,7 +113,7 @@ shape và chừa chỗ cho mũi tên. Với Dagre, các cạnh xuyên nhóm vẫ
 
 Luồng dùng chung: `mermaid-model.mjs` parse source → `text_geometry.py` đo
 Pango và tạo outline chữ → `draw-probe.mjs` tính kích thước shape/node/nhãn →
-engine layout → clipping theo shape, shortcut/bo góc, marker, style, SVG →
+engine layout → clipping theo shape, marker, style, SVG →
 Python kiểm tra output rồi dùng librsvg xuất PNG.
 Dagre gọi `dagre.layout` hoặc `layoutSubgraphs` cho cây nhóm; ELK gọi
 `elk-layout.mjs` với thuật toán `layered`, cây children thật và
@@ -96,6 +122,11 @@ cho các cạnh xuyên cấp. Nhóm không có cạnh xuyên ranh giới dùng
 `SEPARATE_CHILDREN` để giữ hướng riêng. Tọa độ node được cộng qua các parent,
 còn tọa độ cạnh/nhãn được cộng theo container mà ELK trả về. ID gốc và đối
 tượng geometry/style được giữ trong graph hiện tại.
+
+Tiêu đề nhóm được khai báo với ELK. Nếu routing đi qua chữ của tiêu đề,
+adapter yêu cầu port bên hông cho các cạnh qua biên nhóm đó và chạy lại ELK
+(tối đa bốn lượt). Các nhóm còn lại được tự chọn port. Đây là ràng buộc đầu
+vào; mọi đoạn đường và bend point vẫn do ELK tính, không nối sửa đường sau đó.
 
 ELK dùng **routing trực giao của ELK** và vị trí nhãn của ELK, rồi dùng chung
 phần vẽ cạnh hiện tại. Ảnh khác nhau ở cả bố cục lẫn routing. Đây là chế độ
@@ -122,6 +153,17 @@ khi ghép PNG bằng Cairo, không co giãn riêng từng sơ đồ.
 
 Kiểm tra bộ chuyển đổi ELK: `node tests/verify_elk.mjs` sau `cd renderer && npm ci`.
 
+Kiểm tra các yêu cầu công khai với ELK được chọn rõ ràng (các lần CLI cũng
+truyền `--layout elk`, không thay mặc định trong API):
+
+```bash
+VERIFY_LAYOUT=elk RENDERER_IMAGE=aiz-render-runtime:dagre-elk bash scripts/verify.sh all
+```
+
+Đối chiếu yêu cầu và phạm vi còn thiếu: `docs/elk-requirements-audit.md` ở repo
+phát triển. Docker/seccomp kiểm thử ở đây không xác nhận tích hợp Landlock
+và `office_sandbox.py` riêng của công ty.
+
 ## Build Docker là một lựa chọn triển khai
 
 Các recipe được giữ ngoài code, chạy từ project root:
@@ -143,3 +185,29 @@ Việc đăng ký PROGRAMS/PROGRAM_READ/scratch, Landlock/seccomp và resource l
 cho office_sandbox.py thuộc hệ thống công ty; package không tự đăng ký agent.
 Tích hợp private đó chưa được kiểm chứng trong repo này. Copy folder là mang
 mã nguồn, không tự cài binary/runtime hoặc tự cấu hình sandbox.
+
+## Giãn khoảng cách node ELK
+
+Dùng `--layout elk --elk-spacing 1.5`, hoặc API
+`render(source, layout="elk", elk_spacing=1.5)`. Hệ số mặc định `1` giữ nguyên
+hình học cũ; nhận số hữu hạn trong `(0, 4]`. Chỉ áp dụng cho ELK. Hệ số tác
+động lên spacing node–node và giữa tầng, theo mức gốc của root và từng nhóm;
+không đổi kích thước node, font, padding tiêu đề hoặc kiểu cạnh. ELK tính lại
+routing theo các vị trí mới. Khoảng cách thực tế còn phụ thuộc nhãn, port và
+ràng buộc khác, không phải mọi khe đều tăng đúng cùng một tỉ lệ.
+
+Đây là khoảng cách bố cục, khác với `--scale` chỉ tăng tỉ lệ pixel của PNG.
+`scripts/render.sh` chuyển tiếp `--elk-spacing` vào CLI. Script so sánh hai
+ảnh dùng tham số này cho ảnh ELK bên phải. Ví dụ so sánh ELK mặc định bên
+trái và ELK giãn 1.5 lần bên phải, cùng pixel scale:
+
+```bash
+docker run --rm --network none --read-only --memory 2g \
+  -v "$PWD:/workspace:ro" -v "$PWD/artifacts:/output:rw" \
+  --tmpfs /tmp:rw,mode=1777 --entrypoint python3 \
+  aiz-render-runtime:local /workspace/scripts/compare_layouts.py \
+  /workspace/test.mmd --left-layout elk --elk-spacing 1.5 --raw-edges \
+  --output /output/elk-spacing-new
+```
+
+Script xuất `elk-default.svg`, `elk.svg` và `compare.png`.

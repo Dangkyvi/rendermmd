@@ -276,12 +276,8 @@ def _layout(data):
         if not isinstance(points, list) or len(points) < 2 or any(not isinstance(p, list) or len(p) != 2 or not all(_number(n) for n in p) for p in points):
             raise RendererError("Edge points không hợp lệ.", "output")
         radii = edge.get("corner_radii")
-        if not isinstance(radii,list) or len(radii)!=len(points) or any(not _number(r) or r<0 for r in radii) or radii[0]!=0 or radii[-1]!=0:
+        if not isinstance(radii,list) or len(radii)!=len(points) or any(not _number(r) or r!=0 for r in radii):
             raise RendererError("Edge corner_radii không hợp lệ.", "output")
-        for i,r in enumerate(radii[1:-1],1):
-            a,c,b=points[i-1:i+2]
-            if r>min(math.dist(a,c),math.dist(c,b))*.4+1e-9:
-                raise RendererError("Edge corner radius vượt chiều dài đoạn.", "output")
         ordinals.append(edge["ordinal"])
     if sorted(ordinals) != list(range(len(ordinals))):
         raise RendererError("Ordinal edge không liên tục/duy nhất.", "output")
@@ -337,15 +333,7 @@ def _svg(data, layout, expected_version=None):
             if json.loads(line.attrib["data-points"])!=edge["points"] or json.loads(line.attrib["data-corner-radii"])!=edge["corner_radii"]:
                 raise ValueError("SVG edge geometry metadata mismatch")
             pts=edge["points"]; expected=["M",*pts[0]]
-            for i in range(1,len(pts)-1):
-                a,c,b=pts[i-1:i+2]; r=edge["corner_radii"][i]
-                if r:
-                    l1=math.dist(a,c);l2=math.dist(b,c)
-                    entry=[c[k]+(a[k]-c[k])*r/l1 for k in (0,1)]
-                    exit=[c[k]+(b[k]-c[k])*r/l2 for k in (0,1)]
-                    expected.extend(["L",*entry,"Q",*c,*exit])
-                else: expected.extend(["L",*c])
-            expected.extend(["L",*pts[-1]])
+            for p in pts[1:]:expected.extend(["L",*p])
             # Full token consumption: unknown commands, trailing junk and NaN
             # cannot be hidden by a permissive regex tokenizer.
             tokens=line.attrib["d"].split()
@@ -399,19 +387,23 @@ def _png(data, expected):
     raise RendererError("PNG không hoàn chỉnh.", "output")
 
 
-def render(source: str, scale=2, timeout=30, *, layout="dagre", raw_edges=False) -> Rendered:
+def render(source: str, scale=2, timeout=30, *, layout="dagre", raw_edges=False, elk_spacing=1) -> Rendered:
     """Return all three outputs; layout selects dagre (default) or experimental elk.
 
     Timeout covers validation, startup, parsing/layout/shaping, rasterization,
     artifact reads and validation. No paths or subprocesses escape a call.
+    raw_edges is a compatibility argument; both engines retain their routes.
     """
     timeout = _positive(timeout, "timeout", MAX_TIMEOUT)
     deadline = _Deadline(timeout)
     scale = _positive(scale, "scale", MAX_SCALE)
-    if layout not in ("dagre", "elk"):
-        raise RendererError("layout phải là dagre hoặc elk.", "invalid_argument")
+    if layout not in ("dagre", "elk", "auto"):
+        raise RendererError("layout phải là dagre, elk hoặc auto.", "invalid_argument")
     if type(raw_edges) is not bool:
         raise RendererError("raw_edges phải là bool.", "invalid_argument")
+    elk_spacing = _positive(elk_spacing, "elk_spacing", 4)
+    if layout not in ("elk", "auto") and elk_spacing != 1:
+        raise RendererError("elk_spacing chỉ áp dụng cho elk hoặc auto khi chọn ELK.", "invalid_argument")
     encoded = _source_bytes(source)
     node = shutil.which("node")
     raster = shutil.which("rsvg-convert")
@@ -434,7 +426,7 @@ def render(source: str, scale=2, timeout=30, *, layout="dagre", raw_edges=False)
             backend = scratch / "backend"
             svg_path = backend / "diagram.svg"
             layout_path = backend / "layout.json"
-            _run([node, str(_BACKEND), "--internal", str(input_path), str(backend), layout, "raw" if raw_edges else "processed"], scratch, "Node/Pango", deadline,
+            _run([node, str(_BACKEND), "--internal", str(input_path), str(backend), layout, "raw", str(elk_spacing)], scratch, "Node/Pango", deadline,
                  [(svg_path, MAX_SVG_BYTES), (layout_path, MAX_LAYOUT_BYTES)])
             svg_data = _read_limited(svg_path, MAX_SVG_BYTES)
             layout_data = _read_limited(layout_path, MAX_LAYOUT_BYTES)
@@ -490,8 +482,9 @@ def main(argv=None):
     parser.add_argument("input", type=Path)
     parser.add_argument("scale_pos", nargs="?", type=float, help="scale (mặc định 2)")
     parser.add_argument("timeout_pos", nargs="?", type=float, help="timeout toàn lượt (mặc định 30 giây)")
-    parser.add_argument("--layout", choices=("dagre", "elk"), default="dagre", help="Engine bố cục (ELK thử nghiệm)")
-    parser.add_argument("--raw-edges", action="store_true", help="Bỏ qua shortcutRoute và roundedRoute")
+    parser.add_argument("--layout", choices=("dagre", "elk", "auto"), default="dagre", help="Engine bố cục (ELK thử nghiệm)")
+    parser.add_argument("--elk-spacing", type=float, default=1, help="Hệ số khoảng cách node ELK (mặc định 1, tối đa 4)")
+    parser.add_argument("--raw-edges", action="store_true", help="Tương thích lệnh cũ; cả hai engine luôn giữ đường gốc")
     parser.add_argument("--scale", type=float)
     parser.add_argument("--timeout", type=float)
     parser.add_argument("--output", type=Path, help="Thư mục mới để công bố đủ ba file; không ghi đè")
@@ -517,7 +510,7 @@ def main(argv=None):
             raise DiagramSourceError(f"Input không phải UTF-8 hợp lệ: {error}", "invalid_source") from error
         except OSError as error:
             raise RendererError(f"Không đọc được input UTF-8: {error}", "input") from error
-        result = render(source, scale=scale, timeout=deadline.remaining(), layout=args.layout, raw_edges=args.raw_edges)
+        result = render(source, scale=scale, timeout=deadline.remaining(), layout=args.layout, raw_edges=args.raw_edges, elk_spacing=args.elk_spacing)
         destination = args.output or Path.cwd() / f"{args.input.stem}-render-{uuid.uuid4().hex}"
         _publish(result, destination, deadline)
         print(json.dumps({"output": str(destination.resolve())}, ensure_ascii=False))

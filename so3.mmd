@@ -1,0 +1,29 @@
+flowchart TB
+    A([Nhận yêu cầu])
+    CFG[Cấu hình bên ngoài]
+    MON[Theo dõi tiến độ]
+    OUT([Trả kết quả])
+
+    subgraph BE["Backend"]
+        direction TB
+        B1[Đọc yêu cầu]
+        B2[Tổng hợp]
+        B3[Ghi nhật ký]
+
+        subgraph WK["Worker"]
+            direction TB
+            W1[Nhận tác vụ] --> W2[Xử lý]
+            W2 --> W3{Thành công?}
+            W3 -->|Chưa| W4[Điều chỉnh tham số]
+            W4 --> W2
+        end
+
+        B1 --> W1
+        W3 -->|Có| B2
+        B2 --> B3
+    end
+
+    A --> B1
+    CFG -.->|Tham số| W2
+    W2 -.->|Tiến độ| MON
+    B3 --> OUT

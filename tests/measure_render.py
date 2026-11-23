@@ -11,6 +11,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+from verify_common import layout_args, TEST_LAYOUT
 
 
 def process_tree_rss(root_pid):
@@ -45,7 +46,7 @@ def main():
     if not Path('/proc/self/status').is_file():
         print('UNVERIFIED: Linux /proc memory measurement unavailable', file=sys.stderr)
         return 3
-    command = [sys.executable, '/app/renderer.py', str(args.input), '--scale', '2', '--timeout', '30', '--output', str(args.output)]
+    command = [sys.executable, '/app/renderer.py',*layout_args(), str(args.input), '--scale', '2', '--timeout', '30', '--output', str(args.output)]
     peak = 0
     max_processes = 0
     samples = 0
@@ -62,7 +63,7 @@ def main():
                 break
             time.sleep(0.01)
         code = process.wait()
-    report = {'status': 'passed' if code == 0 else 'failed', 'exit_code': code,
+    report = {'layout_engine': TEST_LAYOUT, 'status': 'passed' if code == 0 else 'failed', 'exit_code': code,
               'wall_seconds': time.monotonic() - started, 'sampled_process_tree_peak_rss_bytes': peak,
               'max_observed_processes': max_processes, 'memory_samples': samples, 'sample_interval_seconds': 0.01,
               'memory_method': 'sum of VmRSS for CLI and descendant process leaders via Linux /proc; excludes measuring process; shared pages counted per process; short peaks may be missed',

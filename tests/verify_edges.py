@@ -54,9 +54,13 @@ assert layout['edges'][18]['label_box'] != layout['edges'][19]['label_box']
 assert all(layout['edges'][i]['label_box'][2] > 0 for i in [18,19])
 # Repeated processes must return the same bytes.
 first = [(OUT / name).read_bytes() for name in ['diagram.svg','diagram.png','layout.json']]
+subprocess.run(['python3','/app/renderer.py',*layout_args(),'/output/input.mmd',
+                '--raw-edges','--output','/output/raw-compat'],check=True,timeout=35)
+assert first==[(Path('/output/raw-compat')/name).read_bytes() for name in ['diagram.svg','diagram.png','layout.json']]
 run(source)
 assert first == [(OUT / name).read_bytes() for name in ['diagram.svg','diagram.png','layout.json']]
 print('PASS edges: strokes, markers, invisible, ordinal, parallel, chain, &, cycles, geometry, PNG, deterministic')
+print('PASS edges: legacy --raw-edges and default output are byte-identical')
 
 metadata = json.loads(subprocess.check_output([
     'node', '/app/tests/inspect-edges.mjs', '/app/tests/fixtures/edges.mmd']))['edges']
@@ -99,7 +103,7 @@ boxes = {n['id']:n['box'] for n in layout['nodes']}
 assert boxes['A'][0] + boxes['A'][2] < boxes['B'][0]
 assert layout['edges'][0]['ordinal'] == 0 and len(layout['edges'][0]['points']) >= 2
 Path('/output/input.mmd').write_text('flowchart LR\nA["broken"\n')
-result = subprocess.run(['python3','/app/renderer.py','/output/input.mmd','--output','/output/rejected'], capture_output=True, text=True)
+result = subprocess.run(['python3','/app/renderer.py',*layout_args(),'/output/input.mmd','--output','/output/rejected'], capture_output=True, text=True)
 assert result.returncode != 0
 assert json.loads(result.stderr)['kind'] == 'syntax'
 assert not Path('/output/rejected').exists(), 'stale success output after failed render'
