@@ -228,4 +228,6 @@ with patch('diagram_edit.Path.write_bytes',side_effect=OSError('injected output 
 assert set(ROOT.iterdir())==before and not list(ROOT.glob('.edit-export-*'))
 assert not list(ROOT.rglob('*.sqlite')) and not list(ROOT.rglob('*.db'))
 print('PASS CLI input files, init/apply/preview/get, atomic publication and scratch cleanup on output failure',flush=True)
+subprocess.run([sys.executable,str(Path(__file__).with_name('verify_edge_edit.py'))],check=True,timeout=240)
+subprocess.run([sys.executable,str(Path(__file__).with_name('verify_region_edit.py'))],check=True,timeout=240)
 print('ALL STATELESS EDITING TESTS PASSED',flush=True)

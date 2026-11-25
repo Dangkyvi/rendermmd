@@ -47,3 +47,28 @@ const crossing=[p(50,-10),p(50,10)];
 const avoidCrossing=orthogonalRoute(starts,ends,[],frame,{wires:[crossing]});
 assert(avoidCrossing.some(q=>Math.abs(q.y)>=12),'a modest detour avoids a crossing');
 console.log('PASS Dijkstra: occupied lanes, crossing costs, two-bend bypass, hard obstacles and deterministic output');
+
+// A real neighbouring wire creates safe lanes, without synthetic guides.
+const longStarts=[{boundary:p(0,0),gate:p(0,0)}],longEnds=[{boundary:p(1000,0),gate:p(1000,0)}];
+const neighbour=[p(0,36),p(1000,36)],bundleFrame=[0,-48,1000,72];
+const withoutBundle=orthogonalRoute(longStarts,longEnds,[],bundleFrame,{wires:[neighbour],parallelPreference:0});
+const bundled=orthogonalRoute(longStarts,longEnds,[],bundleFrame,{wires:[neighbour]});
+assert(withoutBundle.every(q=>q.y===0),'without affinity, shortest direct route wins');
+assert(bundled.some(q=>q.y===24),'prefer a safe parallel lane at 12 units from a real wire');
+for(let i=1;i<bundled.length;i++)if(bundled[i].y===bundled[i-1].y&&Math.abs(bundled[i].x-bundled[i-1].x)>100)
+  assert(Math.abs(bundled[i].y-36)>=12,'bundling cannot follow too close');
+assert.deepEqual(bundled,orthogonalRoute(longStarts,longEnds,[],bundleFrame,{wires:[neighbour]}));
+const stillBlocked=orthogonalRoute(longStarts,longEnds,[[400,-20,600,50]],bundleFrame,{wires:[neighbour]});
+assert(stillBlocked.slice(1).every((q,i)=>segmentClear(stillBlocked[i],q,[[400,-20,600,50]])));
+const duplicateWires=Array.from({length:20},()=>neighbour);
+const shortEnd=[{boundary:p(100,0),gate:p(100,0)}];
+const short=orthogonalRoute(starts,shortEnd,[],[0,-48,100,72],{wires:duplicateWires});
+assert(short.every(q=>q.y===0),'parallel credit cannot stack to justify a large detour');
+console.log('PASS bundling: real-wire grid lanes, safe spacing, non-stacking preference, no forced waypoint and hard obstacles');
+const shortJog=[p(0,0),p(24,0),p(50,0),p(50,2),p(76,2),p(100,2)];
+assert.equal(labelOnRoute(shortJog,24,12,[],[-20,-30,120,30]),null);
+const jogLabel=labelOnRoute(shortJog,24,12,[],[-20,-30,120,30],[],null,{allowAcrossGates:true});
+assert(jogLabel,'a label can span a small bend if its box is clear');
+assert.deepEqual(jogLabel.points[1],shortJog[1]);
+assert.deepEqual(jogLabel.points.at(-2),shortJog.at(-2));
+console.log('PASS label: short routed body supports a free label without artificial waypoints or changed endpoint gates');

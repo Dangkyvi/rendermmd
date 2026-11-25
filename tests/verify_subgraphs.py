@@ -10,10 +10,17 @@ for header in ['flowchart','graph']:
         check_geometry(root,layout)
         positions={n['id']:n['box'] for n in layout['nodes']}
         a,b=positions['rect'],positions['rounded']
-        if direction in ['TB','TD']: assert a[1]+a[3]<b[1]
-        if direction=='BT': assert b[1]+b[3]<a[1]
-        if direction=='LR': assert a[0]+a[2]<b[0]
-        if direction=='RL': assert b[0]+b[2]<a[0]
+        if TEST_LAYOUT == 'dagre':
+            # Connected scopes can advance right or down according to their
+            # ports; small scopes can retain Dagre's declared direction.
+            assert a[0]+a[2]<b[0] or a[1]+a[3]<=b[1] or (
+                direction=='BT' and b[1]+b[3]<a[1]) or (
+                direction=='RL' and b[0]+b[2]<a[0]), (direction,a,b)
+        else:
+            if direction in ['TB','TD']: assert a[1]+a[3]<b[1]
+            if direction=='BT': assert b[1]+b[3]<a[1]
+            if direction=='LR': assert a[0]+a[2]<b[0]
+            if direction=='RL': assert b[0]+b[2]<a[0]
     print(f'PASS subgraphs: 14 legacy shapes, labels and boundary contacts; {header} TB/TD/BT/RL/LR')
 
 modern=(APP/'tests/fixtures/modern-shapes.mmd').read_text()
@@ -112,14 +119,14 @@ detours=(APP/'tests/fixtures/cluster-port-detours.mmd').read_text()
 root,layout=run(detours)
 check_clusters(root,layout,{g['id']:g['nodes'] for g in metadata(detours)['subgraphs']})
 if TEST_LAYOUT == 'dagre':
-    for pair,limit in [(('INTENT','LOOP'),500),(('PICK','AGENTS'),850),(('PICK','LEAVES'),450)]:
+    for pair in [('INTENT','LOOP'),('PICK','AGENTS'),('PICK','LEAVES')]:
         edge=next(e for e in layout['edges'] if (e['source'],e['target'])==pair)
         length=sum(math.dist(a,b) for a,b in zip(edge['points'],edge['points'][1:]))
-        assert length<limit,(pair,length,'unnecessary cluster/label detour')
         assert edge['label_box'][2]>0
-        # No upward excursion on these forward edges. Feedback edges elsewhere in
-        # the fixture intentionally retain their original direction and topology.
-        assert all(b[1]>=a[1]-1e-7 for a,b in zip(edge['points'],edge['points'][1:]))
+        # Connected scopes may advance horizontally or vertically. Check detour
+        # against their actual endpoints rather than enforcing a vertical route.
+        direct=abs(edge['points'][-1][0]-edge['points'][0][0])+abs(edge['points'][-1][1]-edge['points'][0][1])
+        assert length<=2.5*direct+96,(pair,length,direct,'unnecessary backtracking in 2D layout')
 print('PASS subgraphs: actual Intent/tool cluster detours, movable labels and near-side ports')
 
 # Official limitation: same private direction, one link to cluster vs one to leaf.
@@ -247,3 +254,6 @@ else:
 
 if TEST_LAYOUT == 'elk':
     subprocess.run(['python3','/app/tests/verify_elk_render.py'],check=True,timeout=180)
+
+if TEST_LAYOUT == 'dagre':
+    subprocess.run(['python3','/app/tests/verify_compact.py'],check=True,timeout=180)

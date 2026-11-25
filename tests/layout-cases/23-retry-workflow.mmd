@@ -1,0 +1,24 @@
+%% Luồng có retry và xử lý lỗi
+%% Mục tiêu: Nhãn cạnh và đường quay lại nhiều nhóm
+flowchart TD
+subgraph INTAKE["Tiếp nhận"]
+A(["Bắt đầu"]) --> B["Kiểm tra yêu cầu"]
+B --> C{"Hợp lệ?"}
+end
+subgraph WORK["Thực thi"]
+D["Lấy tác vụ"] --> E["Gọi dịch vụ"]
+E --> F{"Thành công?"}
+F -->|Chưa| G{"Còn lượt thử?"}
+G -->|Có| H["Chờ rồi thử lại"]
+H --> E
+end
+subgraph RESULT["Kết quả"]
+I["Lưu kết quả"] --> J["Gửi thông báo"]
+J --> K(["Kết thúc"])
+L["Ghi nhận lỗi"] --> K
+end
+C -->|Có| D
+C -->|Không| L
+F -->|Có| I
+G -->|Không| L
+J -.->|Gửi lại trạng thái| B

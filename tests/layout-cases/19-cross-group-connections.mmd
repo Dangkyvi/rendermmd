@@ -1,0 +1,22 @@
+%% Nhiều cạnh chéo nhóm
+%% Mục tiêu: Đầu nối bên trong và đường đi xuyên khung
+flowchart TD
+subgraph G0["Nhóm 1"]
+N0a["Nhận"] --> N0b["Xử lý"]
+end
+subgraph G1["Nhóm 2"]
+N1a["Nhận"] --> N1b["Xử lý"]
+end
+subgraph G2["Nhóm 3"]
+N2a["Nhận"] --> N2b["Xử lý"]
+end
+subgraph G3["Nhóm 4"]
+N3a["Nhận"] --> N3b["Xử lý"]
+end
+N0b --> N1a
+N1b --> N2a
+N2b --> N3a
+
+N0a --> N2b
+N1a --> N3b
+N3b --> N0b

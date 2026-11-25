@@ -33,8 +33,6 @@ for engine,source in [('dagre',cases[0][1]),('elk',groups(3))]:
         if engine=='dagre':
             (backend/'elk-layout.mjs').write_text("throw new Error('FORBIDDEN_ELK');")
         else:
-            p=backend/'draw-probe.mjs'
-            p.write_text(p.read_text().replace('else dagre.layout(graph);',"else (()=>{throw new Error('FORBIDDEN_DAGRE');})();"))
             p=backend/'subgraph-layout.mjs'
             p.write_text(p.read_text().replace('export function layoutSubgraphs(dagre, graph, groups, rankdir) {',
                 "export function layoutSubgraphs(dagre, graph, groups, rankdir) { throw new Error('FORBIDDEN_DAGRE');"))

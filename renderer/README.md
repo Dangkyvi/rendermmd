@@ -70,11 +70,54 @@ SVG ghi engine thực tế, policy và số liệu chọn trong các thuộc tí
 đảm tối ưu thẩm mỹ cho mọi source. Lời gọi cũ không truyền layout vẫn dùng
 Dagre; các lựa chọn tường minh `dagre`/`elk` tiếp tục hoạt động.
 
-`--layout dagre` là mặc định. Cạnh nội bộ đơn giản giữ đường Dagre; cạnh
-xuyên nhóm/nối trực tiếp vào nhóm dùng Dijkstra trong `orthogonalRoute`.
+`--layout dagre` là mặc định. Mỗi scope (kể cả sơ đồ không có nhóm) chạy
+Dagre một lần với nodesep 36/ranksep 64, rồi áp dụng bố cục cân đối:
+
+- Chỉ sắp xếp bổ sung ở scope có ít nhất 3 subgraph con trực tiếp; hoặc
+  đúng 2 subgraph con trực tiếp và ít nhất 4 node lá cùng scope có cạnh nối
+  với hai nhóm đó (một trong hai chiều). Đếm node khác nhau, không đếm cạnh
+  lặp hoặc cạnh invisible. Node nằm bên trong nhóm không tính là node ngoài
+  nối vào nhóm; không cộng số nhóm lồng ở các scope khác.
+- Scope không đạt điều kiện giữ vị trí Dagre ban đầu, kể cả chuỗi dài,
+  fan-out hoặc nhiều node độc lập. Scope đạt điều kiện mà không có cạnh
+  dùng đóng gói theo kích thước; có cạnh dùng `layoutConnectedScope`, không
+  chia hàng hoặc đợi đầy hàng, ưu tiên tiến sang phải/xuống.
+- DFS xác định cạnh quay lại; quan hệ phụ thuộc quyết định thứ tự đặt. Khi
+  nhiều khối sẵn sàng, khối nối với khối vừa đặt được ưu tiên. Không dùng tên
+  node hay nội dung nghiệp vụ để nhận diện luồng.
+- Mỗi cạnh xuyên nhóm mang offset đầu nối thật bên trong nhóm con. Bộ đặt
+  khối xét các cổng cạnh bên/dưới (nhóm không dùng cổng trên tiêu đề), chiều
+  dài dự kiến, giao cắt, vật cản và hướng tiến giữa các cổng. Khối có thể nằm
+  bên phải hoặc bên dưới theo kết nối; tỷ lệ đích 16:9 chỉ là mục tiêu mềm.
+- Một lượt quét xuôi/ngược điều chỉnh cùng bố cục theo các đầu nối, chỉ nhận
+  dịch chuyển không chồng lấn và giảm hàm chi phí. Sau đó tối đa 6 kết nối
+  dài được kiểm tra bằng Dijkstra trên vật cản của scope; đường vòng thực tế
+  được dùng để xét dịch chuyển tiếp trước khi chốt. Không render nhiều bố
+  cục hoàn chỉnh để xếp hạng.
+- Nhãn được đặt giữa các cổng nếu có khoảng trống; nhãn chưa có chỗ được
+  dành vùng dự phòng. Sau khi đặt toàn hình, router tính cạnh xuyên nhóm và
+  cạnh thuộc scope đã thay vị trí, đồng thời có thể điều chỉnh nhãn.
+- Khung nhóm được tính lại từ nội dung, padding và tiêu đề. Offset đầu nối
+  truyền từ nhóm con lên nhóm cha. Đây vẫn là bố trí theo cấp nhóm, không
+  giải đồng thời mọi node xuyên tất cả cấp. Probe dùng hình học khối ở scope;
+  đường cuối cùng còn xét node con, nhãn, clipping shape và marker đầy đủ.
+- Cổng đã dự kiến được ưu tiên nhẹ (16 đơn vị chi phí) khi đi dây, không bị
+  ép cứng. Node, nhãn và tiêu đề vẫn là vật cản cứng. ELK giữ nhánh riêng.
+- Diện tích, số góc, giao cắt và chiều dài dây là các mục tiêu có đánh đổi;
+  không bảo đảm tối ưu toàn cục hoặc vừa mọi màn hình với mọi dữ liệu.
+
+Kiểm tra chuỗi dài bốn hướng, fan-out, node độc lập, containment, nhãn và
+độ ổn định: `bash scripts/verify.sh subgraphs` (Dagre, gồm `tests/verify_compact.py`). ELK không dùng bước này.
+
 Dijkstra lưu trạng thái `(điểm lưới, trục đi vào)` để tính đúng chi phí bẻ
 góc. Hàm mục tiêu gồm chiều dài, số góc, đoạn trùng, khoảng cách giữa dây
-và giao cắt; các làn cách dây có sẵn 12 đơn vị bổ sung vào lưới. Node, nhãn
+và giao cắt. Mỗi đoạn dây ngang/dọc có sẵn bổ sung làn song song cách
+12 và 24 đơn vị vào lưới. Chạy song song ở khoảng cách 12–36 đơn vị được
+chiết giảm tối đa 15% phần chi phí chiều dài, mạnh nhất ở 12 đơn vị. Phần
+ưu tiên không cộng dồn theo số dây; nếu một đoạn đồng thời quá sát dây khác
+(<12) thì không được hưởng giảm phí. Trùng dây/quá sát vẫn bị phạt. Đây là
+khoảng cách ưu tiên, không phải bảo đảm cứng cho mọi đoạn/cổng trong vùng chật.
+Tổng chi phí bước luôn không âm; không sinh đường vòng để tích lũy điểm âm. Node, nhãn
 và tiêu đề nhóm vẫn là vật cản cứng. Đây là heuristic về độ dễ đọc, không
 bảo đảm không có giao cắt hay tìm bố cục tối ưu toàn cục.
 

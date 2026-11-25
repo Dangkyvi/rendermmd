@@ -1,0 +1,20 @@
+%% Nhóm có kích thước khác nhau
+%% Mục tiêu: Cân đối khối lớn và khối nhỏ
+flowchart TD
+subgraph SMALL["Nhận yêu cầu"]
+A["Tiếp nhận"] --> B["Xác thực"]
+end
+subgraph LARGE["Xử lý nghiệp vụ"]
+C["Chuẩn hóa thông tin đầu vào<br/>Gộp nội dung từ nhiều nguồn"] --> D{"Loại yêu cầu?"}
+D --> E["Nhánh một"]
+D --> F["Nhánh hai"]
+D --> G["Nhánh ba"]
+E --> H["Tổng hợp"]
+F --> H
+G --> H
+end
+subgraph STORE["Lưu trữ"]
+I[("Cơ sở dữ liệu")]
+end
+B --> C
+H --> I

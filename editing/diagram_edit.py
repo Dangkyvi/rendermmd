@@ -75,10 +75,14 @@ def _bridge(request, timeout):
     except OSError as e:
         _error("dependency", f"Không chạy được adapter chỉnh sửa: {e}")
     if p.returncode:
+        detail=None
         try:
-            message = json.loads(p.stderr)["message"]
+            detail = json.loads(p.stderr)
+            message = detail["message"]
         except (ValueError, KeyError, TypeError):
             message = p.stderr[:2000]
+        if request.get('action') in ('route_edge','region_seed','relayout_region','validate_region_geometry'):
+            _error(detail.get('code','routing_failed') if isinstance(detail,dict) else 'routing_failed',message,**(detail.get('details',{}) if isinstance(detail,dict) else {}))
         _error("invalid_diagram", message)
     try:
         return json.loads(p.stdout)
@@ -454,6 +458,87 @@ def _apply(state, operations, timeout):
     return results
 
 
+def _route_snapshot(rendered, state, routes, scale, timeout, positions=None, labels=None):
+    """Validate numeric routes, patch only fresh renderer paths, rasterize again."""
+    import html
+    import re
+    import xml.etree.ElementTree as ET
+    import renderer as runtime
+    layout=deepcopy(rendered.layout)
+    svg=rendered.svg
+    positions={} if positions is None else positions
+    labels={} if labels is None else labels
+    if not isinstance(positions,dict) or not isinstance(labels,dict):_error('invalid_geometry','positions/labels phải là object.')
+    if not isinstance(routes,dict):_error('invalid_geometry','routes phải là object.')
+    if positions or labels:
+        layout=_bridge({'action':'region_seed','layout':layout,'state':state,
+                        'positions':positions,'labels':labels},timeout)
+        old_nodes={n['id']:n for n in rendered.layout['nodes']}
+        new_nodes={n['id']:n for n in layout['nodes']}
+        def move_group(match):
+            attrs,body=match.group(1),match.group(2)
+            node_id=re.search(r'(?<![\w-])id="([^"]*)"',attrs)
+            ordinal=re.search(r'data-edge-label="(\d+)"',attrs)
+            dx=dy=0;box=None;node_box=None
+            if node_id and html.unescape(node_id[1]) in positions:
+                id=html.unescape(node_id[1]);before=old_nodes[id];after=new_nodes[id]
+                dx=after['box'][0]-before['box'][0];dy=after['box'][1]-before['box'][1]
+                box=after['label_box'];node_box=after['box']
+            elif ordinal:
+                i=int(ordinal[1]);id=state['edges'][i]['id']
+                if id in labels:
+                    before=next(e for e in rendered.layout['edges'] if e['ordinal']==i)['label_box']
+                    box=next(e for e in layout['edges'] if e['ordinal']==i)['label_box']
+                    dx=box[0]-before[0];dy=box[1]-before[1]
+            if box is None:return match.group()
+            attrs+=f' transform="translate({dx} {dy})"'
+            for name,value in [('data-label-box',box),('data-node-box',node_box)]:
+                if value is not None:attrs=re.sub(rf'{name}="[^"]*"',lambda _:f'{name}="{html.escape(_json(value),quote=True)}"',attrs)
+            return '<g'+attrs+'>'+body+'</g>'
+        svg=re.sub(r'<g\b([^>]*)>(.*?)</g>',move_group,svg,flags=re.S)
+        required={e['id'] for e in state['edges'] if e['source'] in positions or e['target'] in positions}
+        required.update(labels)
+        if not required.issubset(routes):_error('invalid_geometry','Thiếu đường mới cho cạnh nối node đã di chuyển.')
+    if not isinstance(routes,dict) or len(routes)>len(state['edges']):
+        _error('invalid_artifact','Danh sách đường cạnh không hợp lệ.')
+    for edge_id,points in routes.items():
+        # Every replay checks endpoints, label anchor and hard obstacles again.
+        result=_bridge({'action':'route_edge','state':state,'layout':layout,
+                        'edge_id':edge_id,'points':points,'allow_invisible':bool(positions)},timeout)
+        ordinal=next(i for i,e in enumerate(state['edges']) if e['id']==edge_id)
+        data=next(e for e in layout['edges'] if e['ordinal']==ordinal)
+        data['points']=result['points'];data['corner_radii']=[0]*len(result['points'])
+        attrs={'d':' '.join(f'{"M" if i==0 else "L"} {p[0]} {p[1]}' for i,p in enumerate(points)),
+               'data-points':_json(points),'data-corner-radii':_json(data['corner_radii'])}
+        pattern=rf'<path\b[^>]*\bdata-ordinal="{ordinal}"[^>]*>'
+        def patch(match):
+            tag=match.group()
+            for key,value in attrs.items():
+                tag,count=re.subn(rf'(?<![\w-]){key}="[^"]*"',lambda _:f'{key}="{html.escape(value,quote=True)}"',tag)
+                if count!=1:_error('render_failed','Không tìm thấy thuộc tính đường cạnh trong SVG mới.')
+            return tag
+        svg,count=re.subn(pattern,patch,svg)
+        if count!=1:_error('render_failed','Không tìm thấy đúng một cạnh trong SVG mới.')
+    if positions or labels:_bridge({'action':'validate_region_geometry','layout':layout,'state':state,
+                                    'positions':positions,'labels':labels},timeout)
+    version=ET.fromstring(rendered.svg).attrib['data-renderer-version']
+    deadline=runtime._Deadline(timeout)
+    try:
+        svg=runtime._svg(svg.encode(),layout,expected_version=version)
+        with tempfile.TemporaryDirectory(prefix='aiz-edge-edit-') as folder:
+            scratch=Path(folder);source=scratch/'diagram.svg';target=scratch/'diagram.png'
+            source.write_text(svg,encoding='utf-8')
+            raster=shutil.which('rsvg-convert')
+            if not raster:_error('dependency','Thiếu rsvg-convert.')
+            runtime._run([raster,f'--zoom={scale}',f'--output={target}',str(source)],scratch,'edge-raster',deadline,
+                         [(target,runtime.MAX_PNG_BYTES)])
+            png=runtime._read_limited(target,runtime.MAX_PNG_BYTES)
+            runtime._png(png,runtime._raster_dimensions(layout,scale))
+        return runtime.Rendered(svg=svg,png=png,layout=layout)
+    except RendererError as e:
+        _error('render_failed',str(e),renderer_code=e.code)
+
+
 class DiagramEditor:
     """Configuration only. Every call receives an artifact and returns a new one.
 
@@ -527,10 +612,10 @@ class DiagramEditor:
         if len(source)>MAX_SOURCE_CHARS or len(encoded)>MAX_SOURCE_BYTES:
             _error("invalid_argument","Source Mermaid vượt giới hạn renderer.")
 
-    def _result(self, diagram_id, revision, state, source, rendered, changes, results, *, preview=False):
+    def _result(self, diagram_id, revision, state, source, rendered, changes, results, *, preview=False, geometry=None):
         manifest=self._manifest(state,rendered.layout)
         try:
-            raw=pack(diagram_id,revision,source,state,preview=preview)
+            raw=pack(diagram_id,revision,source,state,preview=preview,geometry=geometry)
             svg=embed_svg(rendered.svg,raw)
             png=embed_png(rendered.png,raw)
         except ArtifactError as e:
@@ -553,11 +638,92 @@ class DiagramEditor:
 
     def get_diagram(self, artifact, diagram_id, expected_revision):
         payload=self._checked(artifact,diagram_id,expected_revision)
+        if "geometry" in payload:self._restore_routes(payload,self._render(payload["source"]))
         return {"diagram_id":diagram_id,"revision":expected_revision,"source":payload["source"],
-                "state":deepcopy(payload["state"]),"manifest":self._manifest(payload["state"])}
+                "state":deepcopy(payload["state"]),"manifest":self._manifest(payload["state"]),
+                **({"geometry":deepcopy(payload["geometry"])} if "geometry" in payload else {})}
+
+    def _restore_routes(self, payload, rendered):
+        geometry=payload.get('geometry')
+        if 'geometry' not in payload:return rendered
+        import xml.etree.ElementTree as ET
+        if not isinstance(geometry,dict) or set(geometry) not in ({'renderer_version','base_layout','routes'},{'renderer_version','base_layout','routes','positions','labels'}):
+            _error('invalid_artifact','Geometry metadata không hợp lệ.')
+        version=ET.fromstring(rendered.svg).attrib['data-renderer-version']
+        if geometry['renderer_version']!=version or geometry['base_layout']!=rendered.layout:
+            _error('layout_incompatible','Renderer hoặc bố cục gốc đã thay đổi; không thể phát lại đường đã sửa.')
+        return _route_snapshot(rendered,payload['state'],geometry['routes'],self.scale,self.timeout,geometry.get('positions'),geometry.get('labels'))
+
+    def reroute_edge(self, artifact, diagram_id, expected_revision, edge_id,
+                     avoid_overlap_with=None, prefer_side=None):
+        return self.apply_diagram_edit(artifact,diagram_id,expected_revision,[{
+            'op':'reroute_edge','edge_id':edge_id,'avoid_overlap_with':[] if avoid_overlap_with is None else avoid_overlap_with,
+            'prefer_side':prefer_side}])
+
+    def relayout_region(self, artifact, diagram_id, expected_revision, node_ids,
+                        goal='compact', direction='LR', preserve_boundary=True, bounds=None):
+        operation={'op':'relayout_region','node_ids':node_ids,'goal':goal,
+                   'direction':direction,'preserve_boundary':preserve_boundary}
+        if bounds is not None:operation['bounds']=bounds
+        return self.apply_diagram_edit(artifact,diagram_id,expected_revision,[operation])
+
+    def _reroute(self, payload, operations, preview):
+        import xml.etree.ElementTree as ET
+        if len(operations)>50:_error('invalid_argument','Tối đa 50 lệnh chỉnh hình học mỗi lần.')
+        base=self._render(payload['source'])
+        before=self._restore_routes(payload,base)
+        current=before
+        routes=deepcopy(payload.get('geometry',{}).get('routes',{}))
+        positions=deepcopy(payload.get('geometry',{}).get('positions',{}))
+        labels=deepcopy(payload.get('geometry',{}).get('labels',{}))
+        results=[]
+        for op in operations:
+            if op.get('op')=='relayout_region':
+                if set(op)-{'op','node_ids','goal','direction','preserve_boundary','bounds'}:
+                    _error('invalid_argument','Tham số relayout_region không hợp lệ.')
+                request={k:v for k,v in op.items() if k!='op'}
+                planned=_bridge({'action':'relayout_region','state':payload['state'],
+                                 'layout':current.layout,**request},self.timeout)
+                positions.update(planned['positions']);labels.update(planned['labels']);routes.update(planned['routes'])
+                current=_route_snapshot(base,payload['state'],routes,self.scale,self.timeout,positions,labels)
+                results.append({'op':'relayout_region',**planned})
+            else:
+                if not isinstance(op,dict) or set(op)-{'op','edge_id','avoid_overlap_with','prefer_side'}:
+                    _error('invalid_argument','Tham số reroute_edge không hợp lệ.')
+                edge_id=op.get('edge_id')
+                if not isinstance(edge_id,str):_error('invalid_argument','Cần edge_id.')
+                _get(payload['state'],'edges',edge_id)
+                request={k:v for k,v in op.items() if k!='op'}
+                ordinal=next(i for i,e in enumerate(payload['state']['edges']) if e['id']==edge_id)
+                edge_layout=next(e for e in current.layout['edges'] if e['ordinal']==ordinal)
+                routed=_bridge({'action':'route_edge','state':payload['state'],
+                                'layout':current.layout,**request,'relocate_label':True,
+                                'label_size':edge_layout['label_box'][2:]},self.timeout)
+                routes[edge_id]=routed['points']
+                if routed.get('label_box', [0,0,0,0])[2]>0:
+                    labels[edge_id]=routed['label_box'][:2]
+                current=_route_snapshot(base,payload['state'],routes,self.scale,self.timeout,positions,labels)
+                results.append({'op':'reroute_edge','edge_id':edge_id,**routed})
+        geometry={'renderer_version':ET.fromstring(base.svg).attrib['data-renderer-version'],
+                  'base_layout':base.layout,'routes':routes}
+        if positions or labels:geometry.update(positions=positions,labels=labels)
+        revision=payload['revision'] if preview else payload['revision']+1
+        result=self._result(payload['diagram_id'],revision,payload['state'],payload['source'],current,
+            _changes(payload['state'],payload['state'],before.layout,current.layout),results,
+            preview=preview,geometry=geometry)
+        if preview:result['base_revision']=payload['revision']
+        return result
 
     def _edit(self, artifact, diagram_id, expected_revision, operations, *, preview):
         payload=self._checked(artifact,diagram_id,expected_revision)
+        if not isinstance(operations,list) or not operations:
+            _error('invalid_argument','operations cần danh sách không rỗng.')
+        routing=[isinstance(op,dict) and op.get('op') in ('reroute_edge','relayout_region') for op in operations]
+        if any(routing):
+            if not all(routing):_error('invalid_argument','Không trộn lệnh chỉnh hình học với lệnh sửa model trong cùng batch.')
+            return self._reroute(payload,operations,preview)
+        if 'geometry' in payload:
+            _error('geometry_edit_conflict','Bản này có chỉnh sửa hình học; chưa hỗ trợ sửa model trên bản có geometry. Hãy tạo bản mới từ source.')
         old=payload["state"]
         state=deepcopy(old)
         results=_apply(state,operations,self.timeout)
@@ -580,9 +746,9 @@ class DiagramEditor:
 
     def export_diagram(self, artifact, diagram_id, expected_revision, destination):
         payload=self._checked(artifact,diagram_id,expected_revision)
-        rendered=self._render(payload["source"])
+        rendered=self._restore_routes(payload,self._render(payload["source"]))
         empty={kind:[] for kind in ("nodes","edges","subgraphs")}
-        result=self._result(diagram_id,expected_revision,payload["state"],payload["source"],rendered,_changes(empty,empty),[])
+        result=self._result(diagram_id,expected_revision,payload["state"],payload["source"],rendered,_changes(empty,empty),[],geometry=payload.get("geometry"))
         return _publish(result,destination)
 
 

@@ -344,8 +344,7 @@ try {
   if (layoutEngine === 'elk') {
     const {layoutElk}=await import('./elk-layout.mjs');
     await layoutElk(graph,sourceGroups,rankdir,elkSpacing);
-  } else if (sourceGroups.length) layoutSubgraphs(dagre, graph, sourceGroups, rankdir);
-  else dagre.layout(graph);
+  } else layoutSubgraphs(dagre, graph, sourceGroups, rankdir);
   const titleGeometry = measurements.at(-1);
   if (title) {
     const extraWidth = Math.max(0,titleGeometry.path_box[2]+40-graph.graph().width);

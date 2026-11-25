@@ -1,0 +1,8 @@
+%% Cạnh tự nối
+%% Mục tiêu: Self-loop và cạnh phản hồi
+flowchart TD
+A["Nhận việc"] --> B["Đang xử lý"]
+B -->|Chờ thêm dữ liệu| B
+B --> C{"Thành công?"}
+C -->|Không| B
+C -->|Có| D["Hoàn tất"]

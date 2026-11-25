@@ -1,0 +1,12 @@
+%% Nhóm lồng hai cấp
+%% Mục tiêu: Padding tiêu đề và cạnh xuyên cấp
+flowchart TD
+X["Đầu vào"] --> A
+subgraph OUTER["Dịch vụ"]
+A["Tiếp nhận"] --> B
+subgraph INNER["Bộ xử lý"]
+B["Phân tích"] --> C["Thực thi"]
+end
+C --> D["Tổng hợp"]
+end
+D --> Y["Đầu ra"]

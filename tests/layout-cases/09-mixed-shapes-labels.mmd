@@ -1,0 +1,9 @@
+%% Hình dạng và nhãn dài
+%% Mục tiêu: Node lớn nhỏ và nhãn nhiều dòng
+flowchart TD
+A(["Nhận yêu cầu"]) --> B["Chuẩn hóa thông tin khách hàng<br/>Kiểm tra định dạng và quyền truy cập"]
+B --> C{"Có dữ liệu<br/>trong bộ nhớ đệm?"}
+C -->|Đã có kết quả hợp lệ| D[("Kho dữ liệu")]
+C -->|Chưa có| E[["Gọi dịch vụ xử lý"]]
+E --> D
+D --> F(["Trả kết quả"])

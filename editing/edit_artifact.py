@@ -26,9 +26,12 @@ def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode('utf-8')
 
 
-def pack(diagram_id, revision, source, state, *, preview=False):
+def pack(diagram_id, revision, source, state, *, preview=False, geometry=None):
     payload = dict(format='mmdToDiagram/editable', schema=1, diagram_id=diagram_id,
                    revision=revision, source=source, state=state, preview=preview)
+    if geometry is not None:
+        payload['schema']=2
+        payload['geometry']=geometry
     payload['checksum'] = hashlib.sha256(canonical(payload)).hexdigest()
     raw = canonical(payload)
     if len(raw) > MAX_METADATA_BYTES:
@@ -52,8 +55,8 @@ def unpack(raw):
         payload = json.loads(raw, object_pairs_hook=_unique_pairs,
                              parse_constant=lambda v: (_ for _ in ()).throw(ArtifactError('JSON không hữu hạn.')))
         keys = {'format','schema','diagram_id','revision','source','state','preview','checksum'}
-        if not isinstance(payload,dict) or set(payload)!=keys or payload['format']!='mmdToDiagram/editable' or type(payload['schema']) is not int or payload['schema']!=1:
-            raise ArtifactError('Không đúng schema metadata chỉnh sửa v1.')
+        if not isinstance(payload,dict) or set(payload)!=(keys|({'geometry'} if payload.get('schema')==2 else set())) or payload['format']!='mmdToDiagram/editable' or type(payload['schema']) is not int or payload['schema'] not in (1,2):
+            raise ArtifactError('Không đúng schema metadata chỉnh sửa v1/v2.')
         if not isinstance(payload['diagram_id'],str) or not payload['diagram_id'] or type(payload['revision']) is not int or payload['revision']<1 or type(payload['preview']) is not bool:
             raise ArtifactError('diagram_id/revision/preview trong metadata không hợp lệ.')
         if not isinstance(payload['source'],str) or not isinstance(payload['state'],dict):

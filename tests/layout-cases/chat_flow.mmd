@@ -1,0 +1,140 @@
+%% Luồng một lượt chat của root Agent (ai_core_server)
+%% Nguồn: docs/runtime/CHAT_FLOW.md, docs/runtime/NATIVE_TOOLCALL.md
+flowchart TD
+    %% ===================== CORE =====================
+    subgraph CORE[" Core (Java)"]
+        direction TB
+        UI([UI gửi tin nhắn]) --> COMMIT[Commit user message vào DB]
+        COMMIT --> PUB[/Publish envelope/]
+    end
+
+    PUB -->|adaptz.conversation.message.receive.queue| RQ[(RabbitMQ<br/>chat_messages)]
+
+    %% ===================== CONSUMER =====================
+    subgraph CONSUMER["Consumer — ChatMessageExecutor"]
+        direction TB
+        CB[_message_callback<br/>chạy trên worker thread] --> DEDUP{Identity đã có trong<br/>_FINISHED_TURNS?}
+        DEDUP -->|"có, completion = None"| ACK_ONLY[Ack ngay, không chạy lại]
+        DEDUP -->|có completion chưa confirm| REPUB[Publish lại completion đã lưu]
+        DEDUP -->|không| IDS{conversation_id,<br/>message_id, agent_id đủ?}
+        IDS -->|thiếu| RET_F1[return False]
+        IDS -->|đủ| SKILL[Lấy skill_activation.skill_ids<br/>→ selected_skill_ids]
+        SKILL --> STOP[Mở stop-guard scope]
+    end
+
+    RQ --> CB
+
+    %% ===================== ORCHESTRATION =====================
+    subgraph ORCH["ChatOrchestrationService.chat()"]
+        direction TB
+        LOAD[Load conversation, message,<br/>transcript, checkpoint v4, competencies]
+        LOAD --> STALE{Conversation / message<br/>tồn tại?}
+        STALE -->|không| NOTFOUND[ChatEventNotFoundError]
+        STALE -->|có| TCTX[Parse additional_context<br/>→ TurnContext]
+        TCTX --> STATE[Dựng root state<br/>+ reasoning_profile FAST / AUTO / DEEP]
+    end
+
+    STOP --> LOAD
+    NOTFOUND -->|drop, return True| DROP([Bỏ delivery])
+
+    %% ===================== GRAPH =====================
+    subgraph GRAPH["RootAgent — agent_graph (native_toolcall)"]
+        direction TB
+        CTX[Context preparation] --> INTENT{Intent}
+        INTENT -->|quick| QUICK[Trả lời nhanh]
+        INTENT -->|refuse| REFUSE[Từ chối]
+        INTENT -->|cần tool| LOOP
+
+        subgraph LOOP["Vòng tool"]
+            direction TB
+            LLM[[LLMGateway — model chọn tool]] --> PICK{Loại tool?}
+
+            PICK -->|agent tool| AGENTS
+            PICK -->|leaf tool| LEAVES
+            PICK -->|đủ thông tin| FINAL[Final answer]
+
+            subgraph AGENTS["Subagents"]
+                BRAINZ[brainz<br/>dashboard / widget]
+                FILEZ[filez]
+                COLLABZ[collabz]
+                MCPZ[mcpz<br/>MCP của Core]
+            end
+
+            subgraph LEAVES["Leaf tools"]
+                WEB[search_web / web_fetch]
+                CODE[code_execution]
+                WS[read / glob<br/>chỉ khi có workspace]
+                RSKILL[read_skill]
+            end
+
+            AGENTS --> OBS[Observation → state]
+            LEAVES --> OBS
+            OBS --> LIMIT{Vượt limit?}
+            LIMIT -->|chưa| LLM
+            LIMIT -->|rồi| FINAL
+            PICK -->|cần hỏi user| HITL[human_input card<br/>pause lượt]
+        end
+    end
+
+    STATE --> CTX
+
+    %% ===================== PERSIST =====================
+    subgraph PERSIST["Persist & kết quả"]
+        direction TB
+        TS[Lưu turn-state v4] --> TR[_transform_result<br/>reference_items: current trước, history sau]
+        TR --> ANS[write_turn_answer<br/>items/answers/turn-N.md]
+        ANS --> DELIV[deliverable_files<br/>files/agent/ mới hoặc đổi]
+    end
+
+    QUICK --> TS
+    REFUSE --> TS
+    FINAL --> TS
+    HITL --> TS
+
+    %% ===================== DELIVERY =====================
+    subgraph DELIVERY["Giao kết quả — không bao giờ chạy lại lượt"]
+        direction TB
+        STOPCHK{Đã bị stop?} -->|có| STOPPED([Dừng, không publish])
+        STOPCHK -->|không| MAT[GeneratedFileMaterializer<br/>đọc workspace → upload storage]
+        MAT --> MATOK{Thành công?}
+        MATOK -->|lỗi, thử ≤ 3 lần<br/>chờ 1s, 2s| MAT
+        MATOK -->|hết lượt| FAILED[_failed_completion<br/>is_error: true, status failed]
+        MATOK -->|ok| SEND[_publish_completion]
+        FAILED --> SEND
+        SEND --> CONF{Broker confirm?}
+        CONF -->|không, thử ≤ 3 lần| SEND
+        CONF -->|hết lượt| CACHE[Lưu completion vào _FINISHED_TURNS<br/>return False]
+        CONF -->|có| MARK[Đánh dấu _FINISHED_TURNS = None<br/>Ack]
+    end
+
+    DELIV --> STOPCHK
+
+    %% ===================== ERRORS & RETRY =====================
+    ERR{{Exception trong chat}} -->|return False| REQ{x-requeue-count < 3?}
+    LOAD -.->|exception| ERR
+    GRAPH -.->|exception| ERR
+    RET_F1 --> REQ
+    CACHE --> REQ
+    REQ -->|có| RQ
+    REQ -->|"không, user_id ≤ 0"| ANON[Publish completion<br/>state.status = failed]
+    REQ -->|không, user thật| GIVEUP([Hết retry])
+
+    MARK -->|adaptz.conversation.message.complete.queue| CQ[(RabbitMQ<br/>complete queue)]
+    REPUB --> CQ
+    ANON --> CQ
+    CQ --> CORE_OUT([Core ghi assistant message<br/>+ stream lên UI])
+
+    %% ===================== STYLES =====================
+    classDef core fill:#fde68a,stroke:#b45309,color:#1f2937
+    classDef queue fill:#c7d2fe,stroke:#4338ca,color:#1f2937
+    classDef decision fill:#fbcfe8,stroke:#be185d,color:#1f2937
+    classDef err fill:#fecaca,stroke:#b91c1c,color:#1f2937
+    classDef ok fill:#bbf7d0,stroke:#15803d,color:#1f2937
+    classDef llm fill:#e9d5ff,stroke:#7e22ce,color:#1f2937
+
+    class UI,COMMIT,PUB,CORE_OUT core
+    class RQ,CQ queue
+    class DEDUP,IDS,STALE,INTENT,PICK,LIMIT,STOPCHK,MATOK,CONF,REQ decision
+    class ERR,NOTFOUND,FAILED,RET_F1,GIVEUP,DROP,STOPPED err
+    class MARK,ACK_ONLY,FINAL ok
+    class LLM llm

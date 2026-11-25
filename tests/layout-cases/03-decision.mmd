@@ -1,0 +1,8 @@
+%% Một điều kiện
+%% Mục tiêu: Nhãn cạnh và hai nhánh
+flowchart TD
+A(["Bắt đầu"]) --> B{"Dữ liệu hợp lệ?"}
+B -->|Có| C["Xử lý"]
+B -->|Không| D["Báo lỗi"]
+C --> E(["Kết thúc"])
+D --> E

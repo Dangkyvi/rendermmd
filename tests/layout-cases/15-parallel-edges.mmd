@@ -1,0 +1,9 @@
+%% Cạnh song song cùng đầu cuối
+%% Mục tiêu: Khoảng cách dây và nhãn độc lập
+flowchart LR
+A["Dịch vụ nguồn"] -->|Yêu cầu| B["Dịch vụ đích"]
+A -->|Dữ liệu| B
+A -.->|Trạng thái| B
+B -->|Phản hồi| A
+B --> C["Lưu kết quả"]
+C --> D(["Hoàn tất"])

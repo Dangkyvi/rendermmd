@@ -1,0 +1,18 @@
+%% Nhóm lồng ba cấp
+%% Mục tiêu: Tích lũy khung và đường xuyên nhiều cấp
+flowchart TD
+X["Người dùng"] --> A
+subgraph ROOT["Hệ thống"]
+A["Nhận việc"] --> B
+subgraph ENGINE["Engine"]
+B["Lập kế hoạch"] --> C
+subgraph TOOLS["Công cụ"]
+C["Chọn công cụ"] --> D["Thực thi"]
+D --> E["Thu kết quả"]
+end
+E --> F{"Đủ thông tin?"}
+F -->|Chưa| B
+end
+F -->|Đủ| G["Tạo câu trả lời"]
+end
+G --> Y["Hiển thị"]

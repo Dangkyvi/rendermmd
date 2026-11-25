@@ -1,0 +1,14 @@
+%% Ba nhóm: chạm ngưỡng nhóm
+%% Mục tiêu: auto dự kiến chọn ELK
+flowchart TD
+subgraph G0["Nhóm 1"]
+N0a["Nhận"] --> N0b["Xử lý"]
+end
+subgraph G1["Nhóm 2"]
+N1a["Nhận"] --> N1b["Xử lý"]
+end
+subgraph G2["Nhóm 3"]
+N2a["Nhận"] --> N2b["Xử lý"]
+end
+N0b --> N1a
+N1b --> N2a

@@ -1,0 +1,470 @@
+[
+  {
+    "file": "01-single-node.mmd",
+    "level": "easy",
+    "title": "Một node",
+    "focus": "Kích thước và căn nhãn cơ bản",
+    "stats": {
+      "nodes": 1,
+      "edges": 0,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "02-short-chain.mmd",
+    "level": "easy",
+    "title": "Chuỗi ngắn",
+    "focus": "Thứ tự đọc và khoảng cách",
+    "stats": {
+      "nodes": 5,
+      "edges": 4,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "03-decision.mmd",
+    "level": "easy",
+    "title": "Một điều kiện",
+    "focus": "Nhãn cạnh và hai nhánh",
+    "stats": {
+      "nodes": 5,
+      "edges": 5,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "04-diamond-join.mmd",
+    "level": "easy",
+    "title": "Tách rồi nhập nhánh",
+    "focus": "Bố cục hình thoi",
+    "stats": {
+      "nodes": 4,
+      "edges": 4,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "05-fan-out.mmd",
+    "level": "easy",
+    "title": "Một nguồn nhiều đích",
+    "focus": "Độ rộng khi tách nhánh",
+    "stats": {
+      "nodes": 7,
+      "edges": 6,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "06-fan-in.mmd",
+    "level": "easy",
+    "title": "Nhiều nguồn một đích",
+    "focus": "Hội tụ đường dây",
+    "stats": {
+      "nodes": 7,
+      "edges": 6,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "07-independent-nodes.mmd",
+    "level": "easy",
+    "title": "Các node độc lập",
+    "focus": "Đóng gói không có cạnh",
+    "stats": {
+      "nodes": 12,
+      "edges": 0,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "08-disconnected-components.mmd",
+    "level": "easy",
+    "title": "Ba thành phần rời",
+    "focus": "Khoảng cách giữa thành phần",
+    "stats": {
+      "nodes": 12,
+      "edges": 9,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "09-mixed-shapes-labels.mmd",
+    "level": "medium",
+    "title": "Hình dạng và nhãn dài",
+    "focus": "Node lớn nhỏ và nhãn nhiều dòng",
+    "stats": {
+      "nodes": 6,
+      "edges": 6,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "10-long-chain-td.mmd",
+    "level": "medium",
+    "title": "Chuỗi dài TD",
+    "focus": "Tránh kéo hình quá cao",
+    "stats": {
+      "nodes": 20,
+      "edges": 19,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "11-long-chain-lr.mmd",
+    "level": "medium",
+    "title": "Chuỗi dài LR",
+    "focus": "Tránh kéo hình quá ngang",
+    "stats": {
+      "nodes": 20,
+      "edges": 19,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "12-binary-tree.mmd",
+    "level": "medium",
+    "title": "Cây phân nhánh ba tầng",
+    "focus": "Cân đối nhánh",
+    "stats": {
+      "nodes": 15,
+      "edges": 14,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "13-repeated-diamonds.mmd",
+    "level": "medium",
+    "title": "Nhiều lần tách và nhập",
+    "focus": "Dây và nhãn qua nhiều tầng",
+    "stats": {
+      "nodes": 13,
+      "edges": 16,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "14-feedback-cycle.mmd",
+    "level": "medium",
+    "title": "Chu trình phản hồi",
+    "focus": "Cạnh quay lại và thứ tự đọc",
+    "stats": {
+      "nodes": 9,
+      "edges": 10,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "15-parallel-edges.mmd",
+    "level": "medium",
+    "title": "Cạnh song song cùng đầu cuối",
+    "focus": "Khoảng cách dây và nhãn độc lập",
+    "stats": {
+      "nodes": 4,
+      "edges": 6,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "16-self-loops.mmd",
+    "level": "medium",
+    "title": "Cạnh tự nối",
+    "focus": "Self-loop và cạnh phản hồi",
+    "stats": {
+      "nodes": 4,
+      "edges": 5,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "17-two-groups.mmd",
+    "level": "medium",
+    "title": "Hai nhóm",
+    "focus": "Đầu nối xuyên khung",
+    "stats": {
+      "nodes": 4,
+      "edges": 3,
+      "subgraphs": 2,
+      "depth": 1
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "18-nested-groups.mmd",
+    "level": "medium",
+    "title": "Nhóm lồng hai cấp",
+    "focus": "Padding tiêu đề và cạnh xuyên cấp",
+    "stats": {
+      "nodes": 6,
+      "edges": 5,
+      "subgraphs": 2,
+      "depth": 2
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "19-cross-group-connections.mmd",
+    "level": "hard",
+    "title": "Nhiều cạnh chéo nhóm",
+    "focus": "Đầu nối bên trong và đường đi xuyên khung",
+    "stats": {
+      "nodes": 8,
+      "edges": 10,
+      "subgraphs": 4,
+      "depth": 1
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "20-unequal-groups.mmd",
+    "level": "hard",
+    "title": "Nhóm có kích thước khác nhau",
+    "focus": "Cân đối khối lớn và khối nhỏ",
+    "stats": {
+      "nodes": 9,
+      "edges": 10,
+      "subgraphs": 3,
+      "depth": 1
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "21-six-stage-pipeline.mmd",
+    "level": "hard",
+    "title": "Pipeline sáu khối",
+    "focus": "Bố trí theo dây thay vì hết hàng",
+    "stats": {
+      "nodes": 12,
+      "edges": 11,
+      "subgraphs": 6,
+      "depth": 1
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "22-mesh-4x4.mmd",
+    "level": "hard",
+    "title": "Lưới kết nối 4 × 4",
+    "focus": "Nhiều nút có hai đầu vào và hai đầu ra",
+    "stats": {
+      "nodes": 16,
+      "edges": 24,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "23-retry-workflow.mmd",
+    "level": "hard",
+    "title": "Luồng có retry và xử lý lỗi",
+    "focus": "Nhãn cạnh và đường quay lại nhiều nhóm",
+    "stats": {
+      "nodes": 12,
+      "edges": 15,
+      "subgraphs": 3,
+      "depth": 1
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "24-three-level-nesting.mmd",
+    "level": "hard",
+    "title": "Nhóm lồng ba cấp",
+    "focus": "Tích lũy khung và đường xuyên nhiều cấp",
+    "stats": {
+      "nodes": 9,
+      "edges": 9,
+      "subgraphs": 3,
+      "depth": 3
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "25-mesh-6x6.mmd",
+    "level": "stress",
+    "title": "Lưới kết nối 6 × 6",
+    "focus": "Kiểm tra độ dày dây và thời gian xử lý",
+    "stats": {
+      "nodes": 36,
+      "edges": 60,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "26-dense-feedback.mmd",
+    "level": "stress",
+    "title": "Chuỗi nhiều cạnh tắt và phản hồi",
+    "focus": "Stress đường dài và nhiều vòng lặp",
+    "stats": {
+      "nodes": 48,
+      "edges": 73,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "27-wide-fork-join.mmd",
+    "level": "stress",
+    "title": "Tách 22 nhánh rồi hội tụ",
+    "focus": "Stress độ rộng và vùng hội tụ",
+    "stats": {
+      "nodes": 24,
+      "edges": 44,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "28-real-chat-flow.mmd",
+    "level": "real-world",
+    "title": "Luồng chat thực tế",
+    "focus": "Bản sao nguyên vẹn chat_flow.mmd tại thời điểm tạo bộ mẫu",
+    "stats": {
+      "nodes": 55,
+      "edges": 63,
+      "subgraphs": 9,
+      "depth": 3
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "29-boundary-nodes-24.mmd",
+    "level": "boundary",
+    "title": "24 node: dưới ngưỡng node",
+    "focus": "auto dự kiến chọn Dagre",
+    "stats": {
+      "nodes": 24,
+      "edges": 23,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "30-boundary-nodes-25.mmd",
+    "level": "boundary",
+    "title": "25 node: chạm ngưỡng node",
+    "focus": "auto dự kiến chọn ELK",
+    "stats": {
+      "nodes": 25,
+      "edges": 24,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "31-boundary-edges-34.mmd",
+    "level": "boundary",
+    "title": "34 cạnh: dưới ngưỡng cạnh",
+    "focus": "auto dự kiến chọn Dagre; 13 node",
+    "stats": {
+      "nodes": 13,
+      "edges": 34,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "32-boundary-edges-35.mmd",
+    "level": "boundary",
+    "title": "35 cạnh: chạm ngưỡng cạnh",
+    "focus": "auto dự kiến chọn ELK; 13 node",
+    "stats": {
+      "nodes": 13,
+      "edges": 35,
+      "subgraphs": 0,
+      "depth": 0
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "33-boundary-groups-2.mmd",
+    "level": "boundary",
+    "title": "Hai nhóm: dưới ngưỡng nhóm",
+    "focus": "auto dự kiến chọn Dagre",
+    "stats": {
+      "nodes": 4,
+      "edges": 3,
+      "subgraphs": 2,
+      "depth": 1
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "34-boundary-groups-3.mmd",
+    "level": "boundary",
+    "title": "Ba nhóm: chạm ngưỡng nhóm",
+    "focus": "auto dự kiến chọn ELK",
+    "stats": {
+      "nodes": 6,
+      "edges": 5,
+      "subgraphs": 3,
+      "depth": 1
+    },
+    "expected_auto_engine": "elk"
+  },
+  {
+    "file": "35-boundary-depth-1.mmd",
+    "level": "boundary",
+    "title": "Nhóm sâu một cấp",
+    "focus": "auto dự kiến chọn Dagre",
+    "stats": {
+      "nodes": 2,
+      "edges": 1,
+      "subgraphs": 1,
+      "depth": 1
+    },
+    "expected_auto_engine": "dagre"
+  },
+  {
+    "file": "36-boundary-depth-2.mmd",
+    "level": "boundary",
+    "title": "Nhóm sâu hai cấp",
+    "focus": "auto dự kiến chọn ELK",
+    "stats": {
+      "nodes": 2,
+      "edges": 1,
+      "subgraphs": 2,
+      "depth": 2
+    },
+    "expected_auto_engine": "elk"
+  }
+]
